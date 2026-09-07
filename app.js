@@ -30,11 +30,25 @@
       riskModuleEnabled: false,
       risks: [],
       outputFormats: [],
-      style: ""
+      style: "",
+      aiMode: "none",
+      aiOptimizedPrompt: null,
+      useOptimizedPrompt: false,
+      aiResult: null,
+      aiResultModel: null,
+      lastAiTask: null
     };
   }
 
   let state = initialState();
+
+  // Uploaded files & upload consent live OUTSIDE the persisted state on
+  // purpose: file content (base64/text, potentially project-sensitive)
+  // should not linger in localStorage across sessions/devices.
+  let uploadedFiles = [];
+  let uploadConsentGiven = false;
+  let aiRequestInFlight = false;
+  let fileIdCounter = 0;
 
   /* ---------------------------------------------------------
      PERSISTENCE
@@ -141,8 +155,102 @@
       "interfaceChips", "riskToggle", "riskChips", "outputChips", "advStyle",
       "generateBtn", "improveBtn", "demoBtn", "resetBtn",
       "scoreRing", "scoreRingProgress", "scoreNumber", "scoreLabel", "scoreSuggestions",
-      "promptOutput", "copyBtn", "exportTxtBtn", "exportMdBtn", "toast"
+      "promptOutput", "copyBtn", "exportTxtBtn", "exportMdBtn", "toast",
+      "filesToggle", "filesBody", "uploadConsent", "dropzone", "fileInput",
+      "fileSelectBtn", "fileList", "knowledgeBaseList",
+      "aiModeSelect", "aiModeHint", "contextCharCount", "aiGenerateBtn",
+      "promptOverrideBadge", "revertOverrideBtn",
+      "aiResultToggle", "aiResultBody", "aiModelStatus",
+      "aiLoading", "aiLoadingText", "aiError",
+      "aiCompare", "aiCompareOriginal", "aiCompareOptimized", "aiAcceptBtn", "aiDiscardBtn",
+      "aiAnswerWrap", "aiAnswer", "aiCopyBtn", "aiExportMdBtn", "aiRegenerateBtn", "aiClearBtn",
+      "aiEmptyHint"
     ].forEach(id => { el[id] = document.getElementById(id); });
+  }
+
+  /* ---------------------------------------------------------
+     GENERAL HELPERS (escaping, formatting, markdown)
+     --------------------------------------------------------- */
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function humanFileSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1024 / 1024).toFixed(2) + " MB";
+  }
+
+  function extFromName(name) {
+    const m = /\.[^.]+$/.exec(name || "");
+    return m ? m[0].toLowerCase() : "";
+  }
+
+  function fileIconFor(kind) {
+    if (kind === "pdf") return "📕";
+    if (kind === "docx") return "📄";
+    return "📝";
+  }
+
+  // Minimal, dependency-free Markdown → safe HTML renderer.
+  // Escapes everything first, THEN applies markdown formatting on top —
+  // this is what keeps rendering an untrusted AI response safe from
+  // injected HTML/script (the escaped text never re-introduces real tags).
+  function renderMarkdownSafe(md) {
+    const escaped = escapeHtml(md || "");
+    const lines = escaped.split(/\r?\n/);
+    let html = "";
+    let inList = null;
+    let tableBuffer = [];
+
+    function inlineMd(text) {
+      return text
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/`(.+?)`/g, "<code>$1</code>");
+    }
+    function flushList() {
+      if (inList) { html += `</${inList}>`; inList = null; }
+    }
+    function flushTable() {
+      if (!tableBuffer.length) return;
+      const rows = tableBuffer.filter(r => !/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/.test(r));
+      tableBuffer = [];
+      if (!rows.length) return;
+      const cellsOf = (r) => r.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      const header = cellsOf(rows[0]);
+      html += "<table><thead><tr>" + header.map(c => `<th>${inlineMd(c)}</th>`).join("") + "</tr></thead><tbody>";
+      for (let i = 1; i < rows.length; i++) {
+        html += "<tr>" + cellsOf(rows[i]).map(c => `<td>${inlineMd(c)}</td>`).join("") + "</tr>";
+      }
+      html += "</tbody></table>";
+    }
+
+    for (const line of lines) {
+      if (/^\s*\|.*\|\s*$/.test(line)) { tableBuffer.push(line.trim()); continue; }
+      if (tableBuffer.length) flushTable();
+
+      const h = /^(#{1,3})\s+(.*)$/.exec(line);
+      if (h) { flushList(); const lvl = h[1].length; html += `<h${lvl}>${inlineMd(h[2])}</h${lvl}>`; continue; }
+
+      const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+      if (ol) { if (inList !== "ol") { flushList(); html += "<ol>"; inList = "ol"; } html += `<li>${inlineMd(ol[1])}</li>`; continue; }
+
+      const ul = /^\s*[-*]\s+(.*)$/.exec(line);
+      if (ul) { if (inList !== "ul") { flushList(); html += "<ul>"; inList = "ul"; } html += `<li>${inlineMd(ul[1])}</li>`; continue; }
+
+      flushList();
+      if (line.trim() === "") continue;
+      html += `<p>${inlineMd(line)}</p>`;
+    }
+    flushList();
+    flushTable();
+    return html;
   }
 
   /* ---------------------------------------------------------
@@ -384,8 +492,15 @@
     return header + buildSections().map(s => `## ${s.n}. ${s.title}\n\n${s.body}`).join("\n\n");
   }
 
+  function getActivePromptText() {
+    return (state.useOptimizedPrompt && state.aiOptimizedPrompt) ? state.aiOptimizedPrompt : generatePlainText();
+  }
+
   function renderPreview() {
-    el.promptOutput.textContent = generatePlainText();
+    const useOverride = !!(state.useOptimizedPrompt && state.aiOptimizedPrompt);
+    el.promptOutput.textContent = useOverride ? state.aiOptimizedPrompt : generatePlainText();
+    if (el.promptOverrideBadge) el.promptOverrideBadge.classList.toggle("hidden", !useOverride);
+    updateContextCharCount();
   }
 
   /* ---------------------------------------------------------
@@ -483,9 +598,8 @@
      COPY / EXPORT
      --------------------------------------------------------- */
 
-  function copyPrompt() {
-    const text = generatePlainText();
-    const done = () => showToast("In Zwischenablage kopiert!");
+  function copyTextToClipboard(text, successMsg) {
+    const done = () => showToast(successMsg);
     const fail = () => {
       try {
         const ta = document.createElement("textarea");
@@ -509,6 +623,10 @@
     }
   }
 
+  function copyPrompt() {
+    copyTextToClipboard(getActivePromptText(), "In Zwischenablage kopiert!");
+  }
+
   function downloadFile(filename, content, mime) {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -524,15 +642,330 @@
   function exportTxt() {
     if (!state.teamId) { showToast("Bitte zuerst ein Team auswählen."); return; }
     const team = getTeamById(state.teamId);
-    downloadFile(`superprompt_${team.id}.txt`, generatePlainText(), "text/plain;charset=utf-8");
+    downloadFile(`superprompt_${team.id}.txt`, getActivePromptText(), "text/plain;charset=utf-8");
     showToast("TXT exportiert.");
   }
 
   function exportMd() {
     if (!state.teamId) { showToast("Bitte zuerst ein Team auswählen."); return; }
     const team = getTeamById(state.teamId);
-    downloadFile(`superprompt_${team.id}.md`, generateMarkdown(), "text/markdown;charset=utf-8");
+    const content = (state.useOptimizedPrompt && state.aiOptimizedPrompt)
+      ? `# Superprompt (KI-optimiert) — ${team.name}\n\n${state.aiOptimizedPrompt}`
+      : generateMarkdown();
+    downloadFile(`superprompt_${team.id}.md`, content, "text/markdown;charset=utf-8");
     showToast("Markdown exportiert.");
+  }
+
+  /* ---------------------------------------------------------
+     COLLAPSIBLE SECTIONS
+     --------------------------------------------------------- */
+
+  function bindCollapsible(headerEl, bodyEl) {
+    headerEl.addEventListener("click", () => {
+      const expanded = headerEl.getAttribute("aria-expanded") === "true";
+      headerEl.setAttribute("aria-expanded", String(!expanded));
+      bodyEl.classList.toggle("hidden", expanded);
+    });
+  }
+
+  function expandCollapsible(headerEl, bodyEl) {
+    headerEl.setAttribute("aria-expanded", "true");
+    bodyEl.classList.remove("hidden");
+  }
+
+  /* ---------------------------------------------------------
+     PROJEKTWISSEN (offizielle Wissensbasis — Version 1: Anzeige)
+     --------------------------------------------------------- */
+
+  function renderKnowledgeBase() {
+    el.knowledgeBaseList.innerHTML = "";
+    PROJECT_KNOWLEDGE_BASE.forEach(doc => {
+      const card = document.createElement("div");
+      card.className = "knowledge-item" + (doc.status === "planned" ? " is-planned" : "");
+      card.innerHTML = `
+        <div class="knowledge-item-title">${escapeHtml(doc.title)}</div>
+        <div class="knowledge-item-desc">${escapeHtml(doc.description)}</div>
+        <span class="knowledge-item-tag">${doc.status === "planned" ? "Geplant" : "Verfügbar (Referenz)"}</span>
+      `;
+      el.knowledgeBaseList.appendChild(card);
+    });
+  }
+
+  /* ---------------------------------------------------------
+     FILE UPLOAD (Projektdateien als Kontext)
+     --------------------------------------------------------- */
+
+  function syncUploadConsentUi() {
+    el.fileSelectBtn.disabled = !uploadConsentGiven;
+    el.dropzone.classList.toggle("is-disabled", !uploadConsentGiven);
+  }
+
+  function addFiles(fileListInput) {
+    if (!uploadConsentGiven) {
+      showToast("Bitte zuerst die Datenschutz-Bestätigung ankreuzen.");
+      return;
+    }
+    const incoming = Array.from(fileListInput);
+
+    for (const file of incoming) {
+      if (uploadedFiles.length >= FILE_UPLOAD_LIMITS.maxFiles) {
+        showToast(`Maximal ${FILE_UPLOAD_LIMITS.maxFiles} Dateien erlaubt.`);
+        break;
+      }
+      const ext = extFromName(file.name);
+      const typeInfo = ALLOWED_FILE_TYPES[ext];
+      const id = "f" + (++fileIdCounter);
+
+      if (!typeInfo) {
+        uploadedFiles.push({ id, name: file.name, size: file.size, kind: null, status: "error", errorMsg: `Dateityp "${ext || "?"}" wird nicht unterstützt.` });
+        continue;
+      }
+      if (file.size === 0) {
+        uploadedFiles.push({ id, name: file.name, size: file.size, kind: typeInfo.kind, status: "error", errorMsg: "Datei ist leer." });
+        continue;
+      }
+      if (file.size > FILE_UPLOAD_LIMITS.maxFileSizeBytes) {
+        uploadedFiles.push({ id, name: file.name, size: file.size, kind: typeInfo.kind, status: "error", errorMsg: `Datei zu gross (max. ${Math.round(FILE_UPLOAD_LIMITS.maxFileSizeBytes / 1024 / 1024)} MB).` });
+        continue;
+      }
+      const totalSoFar = uploadedFiles.reduce((sum, f) => sum + (f.status !== "error" ? f.size : 0), 0);
+      if (totalSoFar + file.size > FILE_UPLOAD_LIMITS.maxTotalSizeBytes) {
+        uploadedFiles.push({ id, name: file.name, size: file.size, kind: typeInfo.kind, status: "error", errorMsg: "Kombinierte Dateigrösse überschreitet das Limit." });
+        continue;
+      }
+
+      const entry = { id, name: file.name, size: file.size, kind: typeInfo.kind, mime: typeInfo.mime, status: "processing", errorMsg: "" };
+      uploadedFiles.push(entry);
+
+      const reader = new FileReader();
+      if (typeInfo.kind === "text") {
+        reader.onload = () => {
+          entry.text = String(reader.result || "");
+          entry.status = "ready";
+          renderFileList();
+        };
+        reader.onerror = () => { entry.status = "error"; entry.errorMsg = "Datei konnte nicht gelesen werden."; renderFileList(); };
+        reader.readAsText(file);
+      } else {
+        reader.onload = () => {
+          const dataUrl = String(reader.result || "");
+          entry.base64 = dataUrl.split(",")[1] || "";
+          entry.status = "ready";
+          renderFileList();
+        };
+        reader.onerror = () => { entry.status = "error"; entry.errorMsg = "Datei konnte nicht gelesen werden."; renderFileList(); };
+        reader.readAsDataURL(file);
+      }
+    }
+    renderFileList();
+  }
+
+  function removeFile(id) {
+    uploadedFiles = uploadedFiles.filter(f => f.id !== id);
+    renderFileList();
+  }
+
+  function renderFileList() {
+    el.fileList.innerHTML = "";
+    uploadedFiles.forEach(f => {
+      const row = document.createElement("div");
+      row.className = "file-item" + (f.status === "error" ? " is-error" : "");
+      const statusLabel = f.status === "ready" ? "Bereit" : f.status === "error" ? "Fehler" : "Wird verarbeitet …";
+      const statusClass = f.status === "ready" ? "status-ready" : f.status === "error" ? "status-error" : "status-processing";
+      row.innerHTML = `
+        <span class="file-item-icon">${fileIconFor(f.kind)}</span>
+        <span class="file-item-info">
+          <span class="file-item-name">${escapeHtml(f.name)}</span>
+          <span class="file-item-meta">${escapeHtml((f.kind || "?").toUpperCase())} · ${humanFileSize(f.size)}</span>
+          ${f.status === "error" ? `<div class="file-item-error-msg">${escapeHtml(f.errorMsg)}</div>` : ""}
+        </span>
+        <span class="file-item-status ${statusClass}">${statusLabel}</span>
+      `;
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "file-item-remove";
+      removeBtn.setAttribute("aria-label", "Entfernen");
+      removeBtn.textContent = "✕";
+      removeBtn.addEventListener("click", () => removeFile(f.id));
+      row.appendChild(removeBtn);
+      el.fileList.appendChild(row);
+    });
+    updateContextCharCount();
+  }
+
+  function buildFilesPayload() {
+    return uploadedFiles
+      .filter(f => f.status === "ready")
+      .map(f => f.kind === "text"
+        ? { name: f.name, kind: "text", text: f.text }
+        : { name: f.name, kind: f.kind, base64: f.base64 });
+  }
+
+  function updateContextCharCount() {
+    const promptLen = state.teamId ? getActivePromptText().length : 0;
+    const textFileChars = uploadedFiles
+      .filter(f => f.status === "ready" && f.kind === "text")
+      .reduce((sum, f) => sum + (f.text ? f.text.length : 0), 0);
+    const otherFilesCount = uploadedFiles.filter(f => f.status === "ready" && (f.kind === "pdf" || f.kind === "docx")).length;
+    let label = `${promptLen + textFileChars} Zeichen Kontext`;
+    if (otherFilesCount) label += ` + ${otherFilesCount} Dokument(e)`;
+    if (el.contextCharCount) el.contextCharCount.textContent = label;
+  }
+
+  /* ---------------------------------------------------------
+     KI-UNTERSTÜTZUNG (mode select + Mit KI generieren)
+     --------------------------------------------------------- */
+
+  function renderAiModeOptions() {
+    el.aiModeSelect.innerHTML = "";
+    AI_MODE_OPTIONS.forEach(opt => {
+      const o = document.createElement("option");
+      o.value = opt.id;
+      o.textContent = opt.label;
+      el.aiModeSelect.appendChild(o);
+    });
+    el.aiModeSelect.value = state.aiMode || "none";
+    updateAiModeHint();
+  }
+
+  function updateAiModeHint() {
+    const opt = AI_MODE_OPTIONS.find(o => o.id === state.aiMode) || AI_MODE_OPTIONS[0];
+    el.aiModeHint.textContent = opt.hint;
+    el.aiGenerateBtn.disabled = state.aiMode === "none" || aiRequestInFlight;
+  }
+
+  function showAiLoading(text) {
+    el.aiLoadingText.textContent = text;
+    el.aiLoading.classList.remove("hidden");
+    el.aiEmptyHint.classList.add("hidden");
+  }
+  function hideAiLoading() {
+    el.aiLoading.classList.add("hidden");
+  }
+  function showAiError(code, message) {
+    el.aiError.textContent = message || "KI momentan nicht verfügbar.";
+    el.aiError.classList.remove("hidden");
+  }
+  function hideAiError() {
+    el.aiError.classList.add("hidden");
+  }
+
+  function renderAiCompare() {
+    el.aiCompareOriginal.textContent = generatePlainText();
+    el.aiCompareOptimized.textContent = state.aiOptimizedPrompt || "";
+    const has = !!state.aiOptimizedPrompt;
+    el.aiCompare.classList.toggle("hidden", !has);
+    if (has) { el.aiAnswerWrap.classList.add("hidden"); el.aiEmptyHint.classList.add("hidden"); }
+  }
+
+  function renderAiAnswer() {
+    el.aiAnswer.innerHTML = state.aiResult ? renderMarkdownSafe(state.aiResult) : "";
+    const has = !!state.aiResult;
+    el.aiAnswerWrap.classList.toggle("hidden", !has);
+    if (has) { el.aiCompare.classList.add("hidden"); el.aiEmptyHint.classList.add("hidden"); }
+    if (state.aiResultModel) el.aiModelStatus.textContent = `Modell: ${state.aiResultModel}`;
+  }
+
+  function acceptOptimizedPrompt() {
+    if (!state.aiOptimizedPrompt) return;
+    state.useOptimizedPrompt = true;
+    renderPreview();
+    saveState();
+    showToast("KI-optimierte Version übernommen.");
+  }
+
+  function discardOptimizedPrompt() {
+    state.aiOptimizedPrompt = null;
+    state.useOptimizedPrompt = false;
+    el.aiCompare.classList.add("hidden");
+    el.aiEmptyHint.classList.remove("hidden");
+    renderPreview();
+    saveState();
+  }
+
+  function revertOverride() {
+    state.useOptimizedPrompt = false;
+    renderPreview();
+    saveState();
+  }
+
+  function clearAiResult() {
+    state.aiResult = null;
+    state.aiResultModel = null;
+    el.aiAnswerWrap.classList.add("hidden");
+    el.aiEmptyHint.classList.remove("hidden");
+    saveState();
+  }
+
+  function copyAiAnswer() {
+    if (!state.aiResult) return;
+    copyTextToClipboard(state.aiResult, "Antwort kopiert!");
+  }
+
+  function exportAiAnswerMd() {
+    if (!state.aiResult) return;
+    const team = getTeamById(state.teamId);
+    downloadFile(`ki-ergebnis_${team ? team.id : "adelboden"}.md`, state.aiResult, "text/markdown;charset=utf-8");
+    showToast("Markdown exportiert.");
+  }
+
+  async function callAi(task) {
+    if (!state.teamId) { showToast("Bitte zuerst ein Team auswählen."); return; }
+    if (aiRequestInFlight) return;
+
+    const promptText = getActivePromptText();
+    const filesPayload = buildFilesPayload();
+    const approxChars = promptText.length + filesPayload.reduce((s, f) => s + (f.text ? f.text.length : 0), 0);
+
+    if (approxChars > 20000) {
+      const proceed = confirm(`Der Kontext ist sehr gross (${approxChars} Zeichen). Das kann höhere Kosten und Wartezeit verursachen. Trotzdem fortfahren?`);
+      if (!proceed) return;
+    }
+
+    aiRequestInFlight = true;
+    el.aiGenerateBtn.disabled = true;
+    el.aiGenerateBtn.textContent = "Wird generiert …";
+    hideAiError();
+    showAiLoading(filesPayload.some(f => f.kind !== "text") ? "Dokument wird verarbeitet …" : "KI analysiert deinen Prompt …");
+    expandCollapsible(el.aiResultToggle, el.aiResultBody);
+
+    try {
+      const res = await fetch("/.netlify/functions/generate-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task, prompt: promptText, files: filesPayload })
+      });
+
+      let data;
+      try { data = await res.json(); } catch (e) { throw new Error("bad_response"); }
+
+      if (data && data.ok === false) {
+        showAiError(data.code, data.message);
+        return;
+      }
+      if (!res.ok) {
+        showAiError("upstream_error", "KI momentan nicht verfügbar. Bitte später erneut versuchen.");
+        return;
+      }
+
+      state.lastAiTask = task;
+      if (task === "improve") {
+        state.aiOptimizedPrompt = data.result;
+        renderAiCompare();
+      } else {
+        state.aiResult = data.result;
+        state.aiResultModel = data.model || AI_MODEL_LABEL;
+        renderAiAnswer();
+      }
+      saveState();
+    } catch (e) {
+      showAiError("network", "Netzwerkfehler — bitte Internetverbindung prüfen und erneut versuchen.");
+    } finally {
+      aiRequestInFlight = false;
+      hideAiLoading();
+      el.aiGenerateBtn.textContent = "Mit KI generieren";
+      updateAiModeHint();
+    }
   }
 
   /* ---------------------------------------------------------
@@ -579,10 +1012,21 @@
 
   function resetAll() {
     state = initialState();
+    uploadedFiles = [];
+    uploadConsentGiven = false;
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
     el.advFachgebiet.innerHTML = "";
     el.advPhase.innerHTML = "";
     el.advStyle.innerHTML = "";
+    el.uploadConsent.checked = false;
+    syncUploadConsentUi();
+    renderFileList();
+    renderAiModeOptions();
+    el.aiCompare.classList.add("hidden");
+    el.aiAnswerWrap.classList.add("hidden");
+    el.aiError.classList.add("hidden");
+    el.aiEmptyHint.classList.remove("hidden");
+    el.aiModelStatus.textContent = "Modell: —";
     renderAll();
     showToast("Zurückgesetzt.");
   }
@@ -664,6 +1108,51 @@
     el.copyBtn.addEventListener("click", copyPrompt);
     el.exportTxtBtn.addEventListener("click", exportTxt);
     el.exportMdBtn.addEventListener("click", exportMd);
+
+    // --- Collapsible sections ---
+    bindCollapsible(el.filesToggle, el.filesBody);
+    bindCollapsible(el.aiResultToggle, el.aiResultBody);
+
+    // --- File upload ---
+    el.uploadConsent.addEventListener("change", () => {
+      uploadConsentGiven = el.uploadConsent.checked;
+      syncUploadConsentUi();
+    });
+    el.fileSelectBtn.addEventListener("click", () => el.fileInput.click());
+    el.fileInput.addEventListener("change", () => {
+      if (el.fileInput.files.length) addFiles(el.fileInput.files);
+      el.fileInput.value = "";
+    });
+    ["dragover", "dragenter"].forEach(evt => el.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      if (uploadConsentGiven) el.dropzone.classList.add("is-dragover");
+    }));
+    ["dragleave", "drop"].forEach(evt => el.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      el.dropzone.classList.remove("is-dragover");
+    }));
+    el.dropzone.addEventListener("drop", (e) => {
+      if (!uploadConsentGiven) { showToast("Bitte zuerst die Datenschutz-Bestätigung ankreuzen."); return; }
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+    });
+
+    // --- KI-Unterstützung ---
+    el.aiModeSelect.addEventListener("change", () => {
+      state.aiMode = el.aiModeSelect.value;
+      updateAiModeHint();
+      saveState();
+    });
+    el.aiGenerateBtn.addEventListener("click", () => {
+      if (state.aiMode === "improve") callAi("improve");
+      else if (state.aiMode === "answer") callAi("answer");
+    });
+    el.aiAcceptBtn.addEventListener("click", acceptOptimizedPrompt);
+    el.aiDiscardBtn.addEventListener("click", discardOptimizedPrompt);
+    el.revertOverrideBtn.addEventListener("click", revertOverride);
+    el.aiCopyBtn.addEventListener("click", copyAiAnswer);
+    el.aiExportMdBtn.addEventListener("click", exportAiAnswerMd);
+    el.aiRegenerateBtn.addEventListener("click", () => { if (state.lastAiTask) callAi(state.lastAiTask); });
+    el.aiClearBtn.addEventListener("click", clearAiResult);
   }
 
   /* ---------------------------------------------------------
@@ -677,7 +1166,15 @@
     const loaded = loadState();
     if (loaded) state = loaded;
 
+    renderKnowledgeBase();
+    syncUploadConsentUi();
+    renderAiModeOptions();
+
     renderAll();
+
+    if (state.aiOptimizedPrompt) { renderAiCompare(); expandCollapsible(el.aiResultToggle, el.aiResultBody); }
+    if (state.aiResult) { renderAiAnswer(); expandCollapsible(el.aiResultToggle, el.aiResultBody); }
+    if (state.aiResultModel) el.aiModelStatus.textContent = `Modell: ${state.aiResultModel}`;
   }
 
   document.addEventListener("DOMContentLoaded", init);

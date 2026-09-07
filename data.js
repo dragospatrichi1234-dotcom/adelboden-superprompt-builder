@@ -50,6 +50,70 @@ Wenn wichtige Informationen fehlen, triff keine unbegründeten Annahmen. Kennzei
 const PRIVACY_NOTICE = "Keine echten Gäste-, Mitarbeiter-, Kunden- oder sensiblen Personendaten in KI-Prompts eingeben. KI-Ergebnisse müssen vor operativer Verwendung von einem Teammitglied geprüft werden.";
 
 /* ------------------------------------------------------------
+   AI INTEGRATION CONFIG
+   Mirrors netlify/functions/generate-ai.mjs — keep the model
+   label in sync manually if the server-side constant changes.
+   ------------------------------------------------------------ */
+
+const AI_MODEL_LABEL = "gpt-4o-mini";
+
+const AI_MODE_OPTIONS = [
+  { id: "none", label: "Prompt nur erstellen", hint: "Keine KI-Anfrage — nur der lokale Prompt Builder." },
+  { id: "improve", label: "Prompt verbessern (KI)", hint: "KI optimiert Formulierung & Klarheit des fertigen Prompts." },
+  { id: "answer", label: "Vollständige Antwort generieren", hint: "KI beantwortet den fertigen Superprompt direkt." }
+];
+
+const FILE_UPLOAD_LIMITS = {
+  maxFiles: 5,
+  maxFileSizeBytes: 3 * 1024 * 1024,        // 3 MB pro Datei
+  maxTotalSizeBytes: 6 * 1024 * 1024,       // 6 MB kombiniert (Netlify Function Payload-Limit)
+  maxContextChars: 40000                     // harte Obergrenze für extrahierten Text, der an die KI geht
+};
+
+const ALLOWED_FILE_TYPES = {
+  ".txt": { kind: "text", mime: "text/plain" },
+  ".md": { kind: "text", mime: "text/markdown" },
+  ".csv": { kind: "text", mime: "text/csv" },
+  ".pdf": { kind: "pdf", mime: "application/pdf" },
+  ".docx": { kind: "docx", mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }
+};
+
+const AI_GUARDRAIL_TEXT = "Nutze die bereitgestellten Projektunterlagen als Wissensbasis. Erfinde keine Fakten, die darin nicht enthalten sind. Wenn Informationen fehlen oder widersprüchlich sind, kennzeichne dies klar.";
+
+/* ------------------------------------------------------------
+   PROJEKTWISSEN — offizielle Wissensbasis (Version 1: UI/Datenstruktur)
+   In Version 1 sind dies nur Metadaten-Karten (Anzeige), noch ohne
+   Datei-Backend. Spätere Version: echte Dateien hinterlegen/verlinken.
+   ------------------------------------------------------------ */
+
+const PROJECT_KNOWLEDGE_BASE = [
+  {
+    id: "projekthandbuch",
+    title: "Projekthandbuch",
+    description: "Transfermodul Hospitality Live Experience – vollständiger Projektrahmen, Phasen, Organisation, Kennzahlen.",
+    status: "official"
+  },
+  {
+    id: "aufgabenuebersicht",
+    title: "Aufgabenübersicht Sunrise VIP Cube",
+    description: "Zusammengeführte Aufgaben aus F&B, Operations & Logistik, Marketing und Sponsoring mit Terminen.",
+    status: "official"
+  },
+  {
+    id: "team-pitch",
+    title: "Team-Pitch-Unterlagen",
+    description: "Handout & Struktur für die Team-Pitches der Lead-Teams (Verantwortung, Ziel, Schnittstellen, offene Fragen).",
+    status: "official"
+  },
+  {
+    id: "weitere",
+    title: "Weitere Projektdateien",
+    description: "Platzhalter für zusätzliche offizielle Basisdokumente, die im Projektverlauf ergänzt werden.",
+    status: "planned"
+  }
+];
+
+/* ------------------------------------------------------------
    TEAM PRESETS
    Each team: id, name, icon, tagline, persona, fachgebiete,
    contextHint, topics (Team-Intelligenz chips), interfaces,

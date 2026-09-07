@@ -14,7 +14,7 @@
 <title>Adelboden 2027 – Superprompt Builder</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
-<link rel="stylesheet" href="./style.css?v=3">
+<link rel="stylesheet" href="./style.css?v=4">
 </head>
 <body>
 
@@ -161,6 +161,58 @@
 
     </div>
 
+    <!-- FILES & PROJEKTWISSEN (collapsible) -->
+    <div class="card collapsible-card" id="filesCard">
+      <button type="button" class="collapsible-header" id="filesToggle" aria-expanded="false" aria-controls="filesBody">
+        <span class="collapsible-title">📎 Dateien &amp; Projektwissen</span>
+        <span class="collapsible-chevron">▾</span>
+      </button>
+      <div class="collapsible-body hidden" id="filesBody">
+
+        <div class="upload-privacy-warning">
+          ⚠️ Nur projektbezogene Dokumente hochladen. Keine echten Gäste-, Mitarbeitenden-, Kunden-, Gesundheits-, Zahlungs- oder anderen sensiblen Personendaten verwenden.
+        </div>
+
+        <label class="upload-consent" for="uploadConsent">
+          <input type="checkbox" id="uploadConsent">
+          <span>Ich bestätige, dass die hochgeladenen Dateien keine sensiblen personenbezogenen Daten enthalten.</span>
+        </label>
+
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" multiple accept=".txt,.md,.csv,.pdf,.docx" hidden>
+          <div class="dropzone-inner">
+            <span class="dropzone-icon" aria-hidden="true">⬆</span>
+            <span class="dropzone-text">Dateien hierher ziehen oder</span>
+            <button type="button" class="btn btn-small" id="fileSelectBtn" disabled>Datei auswählen</button>
+            <span class="dropzone-hint">PDF, DOCX, TXT, MD, CSV — max. 5 Dateien, je max. 3&nbsp;MB</span>
+          </div>
+        </div>
+
+        <div id="fileList" class="file-list"></div>
+
+        <div class="knowledge-base">
+          <h4 class="knowledge-base-title">Projektwissen <span class="badge-official">Offizielle Wissensbasis</span></h4>
+          <p class="hint">Offizielle Basisdokumente des Projekts — künftig direkt als KI-Kontext nutzbar. Version 1: Übersicht ohne Datei-Backend.</p>
+          <div id="knowledgeBaseList" class="knowledge-base-list"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- KI-UNTERSTÜTZUNG -->
+    <div class="card ai-controls-card">
+      <h3 class="card-title">KI-Unterstützung</h3>
+      <div class="field">
+        <select id="aiModeSelect"></select>
+        <p class="hint" id="aiModeHint"></p>
+      </div>
+      <div class="ai-context-meta">
+        <span id="contextCharCount">0 Zeichen Kontext</span>
+        <span class="cost-note">⚡ KI-Generierung kann externe API-Kosten verursachen.</span>
+      </div>
+      <button id="aiGenerateBtn" class="btn btn-primary btn-ai" type="button" title="Generate with AI" disabled>Mit KI generieren</button>
+    </div>
+
     <div class="action-row">
       <button id="generateBtn" class="btn btn-primary">Prompt generieren</button>
       <button id="improveBtn" class="btn btn-secondary">Prompt verbessern</button>
@@ -199,7 +251,59 @@
           <button id="exportMdBtn" class="btn btn-small" type="button">Markdown</button>
         </div>
       </div>
+      <div id="promptOverrideBadge" class="override-badge hidden">
+        ✓ KI-optimierte Version aktiv — <button id="revertOverrideBtn" class="link-btn" type="button">zur Original-Version zurück</button>
+      </div>
       <pre id="promptOutput" class="prompt-output"></pre>
+    </div>
+
+    <!-- KI-ERGEBNIS (collapsible) -->
+    <div class="card collapsible-card ai-result-card" id="aiResultCard">
+      <button type="button" class="collapsible-header" id="aiResultToggle" aria-expanded="false" aria-controls="aiResultBody">
+        <span class="collapsible-title">🤖 KI-Ergebnis</span>
+        <span class="collapsible-chevron">▾</span>
+      </button>
+      <div class="collapsible-body hidden" id="aiResultBody">
+
+        <div class="ai-status-row">
+          <span id="aiModelStatus" class="ai-model-status">Modell: —</span>
+        </div>
+
+        <div id="aiLoading" class="ai-loading hidden">
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="aiLoadingText">KI analysiert deinen Prompt …</span>
+        </div>
+
+        <div id="aiError" class="ai-error hidden"></div>
+
+        <div id="aiCompare" class="ai-compare hidden">
+          <div class="ai-compare-col">
+            <h4>Original</h4>
+            <pre id="aiCompareOriginal" class="prompt-output prompt-output-compact"></pre>
+          </div>
+          <div class="ai-compare-col">
+            <h4>KI-optimiert</h4>
+            <pre id="aiCompareOptimized" class="prompt-output prompt-output-compact"></pre>
+          </div>
+          <div class="ai-compare-actions">
+            <button id="aiAcceptBtn" class="btn btn-secondary" type="button">Optimierung übernehmen</button>
+            <button id="aiDiscardBtn" class="btn btn-ghost" type="button">Verwerfen</button>
+          </div>
+        </div>
+
+        <div id="aiAnswerWrap" class="ai-answer-wrap hidden">
+          <div id="aiAnswer" class="ai-answer"></div>
+          <div class="ai-answer-actions">
+            <button id="aiCopyBtn" class="btn btn-small" type="button">Antwort kopieren</button>
+            <button id="aiExportMdBtn" class="btn btn-small" type="button">Als Markdown exportieren</button>
+            <button id="aiRegenerateBtn" class="btn btn-small" type="button">Neu generieren</button>
+            <button id="aiClearBtn" class="btn btn-small btn-danger-ghost" type="button">Ergebnis löschen</button>
+          </div>
+        </div>
+
+        <p id="aiEmptyHint" class="hint">Noch kein KI-Ergebnis. Wähle oben eine KI-Unterstützung und klicke „Mit KI generieren“.</p>
+
+      </div>
     </div>
 
   </aside>
@@ -214,7 +318,7 @@
   <span>Alle Eingaben werden ausschliesslich lokal in diesem Browser gespeichert.</span>
 </footer>
 
-<script src="./data.js?v=3"></script>
-<script src="./app.js?v=4"></script>
+<script src="./data.js?v=4"></script>
+<script src="./app.js?v=5"></script>
 </body>
 </html>

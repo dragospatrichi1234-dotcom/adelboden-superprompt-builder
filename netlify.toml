@@ -1,6 +1,11 @@
 [build]
   publish = "."
 
+[functions]
+  directory = "netlify/functions"
+  # No npm dependencies on purpose — generate-ai.mjs uses only Node built-ins
+  # (node:zlib) and the global fetch, so no build/install step is required.
+
 [[headers]]
   for = "/*"
   [headers.values]
