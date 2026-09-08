@@ -28,7 +28,7 @@ const MAX_TEAMS = 20;
 // Mirrors TEAM_ROSTER in data.js — keep both in sync manually if the
 // roster changes (organigram update, new members, etc.).
 const TEAM_ROSTER = [
-  { id: "leitung", isLeitung: true, lead: ["Luana H.", "Alfredo"], stv: ["Lena", "Daniel"], members: ["Luana H.", "Alfredo", "Lena", "Daniel"] },
+  { id: "leitung", isLeitung: true, lead: ["Luana H.", "Alfredo"], stv: ["Lena", "Daniel"], members: ["Luana H.", "Alfredo", "Lena", "Daniel", "Sandro"] },
   { id: "food", lead: ["Saskia", "Ann-Sophie"], stv: ["Jiyan", "Ramon"], members: ["Dragos", "Gianluca", "Meret", "Jan", "Laura F.", "Jiyan", "Ramon", "Ann-Sophie", "Saskia"] },
   { id: "hospitality", lead: ["Ignacio"], stv: ["Céline"], members: ["William", "Laura H.", "Jessica", "Anna", "Lea", "Lars", "Ronnie", "Jan", "Céline", "Ignacio"] },
   { id: "club", lead: ["Rouven", "Thore"], stv: ["Raffaela", "Janina"], members: ["Nina", "Cyril", "Thore", "Janina", "Raffaela", "Rouven"] },
@@ -47,7 +47,8 @@ const LEITUNG_PINS = {
   "Luana H.": "7284",
   "Alfredo": "5931",
   "Lena": "4067",
-  "Daniel": "8352"
+  "Daniel": "8352",
+  "Sandro": "2916"
 };
 
 function jsonResponse(status, body) {
