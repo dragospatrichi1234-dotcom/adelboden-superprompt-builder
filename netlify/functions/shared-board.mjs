@@ -352,7 +352,7 @@ export default async (request) => {
       const defaults = ["Analyse", "Konzept", "Planung", "Ausführung", "Abschluss"];
       const created = [];
       for (let i = 0; i < defaults.length; i++) {
-        const item = { id: genId(), teamId, name: defaults[i], order: i, status: i === 0 ? "active" : "open" };
+        const item = { id: genId(), teamId, name: defaults[i], period: "", summary: "", order: i, status: i === 0 ? "active" : "open" };
         await store.setJSON(item.id, item);
         created.push(item);
       }
@@ -364,7 +364,15 @@ export default async (request) => {
       if (!d.teamId || !d.name) return errorResponse(400, "invalid_request", "Team oder Name fehlt.");
       if (!canEditTeam(auth.actor, d.teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann Phasen anlegen.");
       const existingCount = (await listAll("phases")).filter(p => p.teamId === d.teamId).length;
-      const item = { id: genId(), teamId: d.teamId, name: String(d.name).trim().slice(0, MAX_TITLE_LEN), order: existingCount, status: "open" };
+      const item = {
+        id: genId(),
+        teamId: d.teamId,
+        name: String(d.name).trim().slice(0, MAX_TITLE_LEN),
+        period: String(d.period || "").trim().slice(0, 100),
+        summary: String(d.summary || "").trim().slice(0, MAX_DESC_LEN),
+        order: existingCount,
+        status: "open"
+      };
       await store.setJSON(item.id, item);
       return jsonResponse(200, { ok: true, item });
     }
@@ -379,6 +387,8 @@ export default async (request) => {
       const updated = {
         ...existing,
         name: d.name !== undefined ? String(d.name).trim().slice(0, MAX_TITLE_LEN) : existing.name,
+        period: d.period !== undefined ? String(d.period).trim().slice(0, 100) : (existing.period || ""),
+        summary: d.summary !== undefined ? String(d.summary).trim().slice(0, MAX_DESC_LEN) : (existing.summary || ""),
         status: ["open", "active", "done"].includes(d.status) ? d.status : existing.status
       };
       await store.setJSON(id, updated);
