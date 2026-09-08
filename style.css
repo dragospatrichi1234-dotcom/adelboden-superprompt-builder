@@ -1186,6 +1186,16 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   margin: 0 0 4px;
 }
 
+.supabase-status-badge {
+  display: inline-block;
+  margin: 6px 0 0;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--navy-2, var(--navy));
+  background: var(--ice);
+  border-radius: 999px;
+}
+
 .edit-lock {
   display: flex;
   align-items: center;
