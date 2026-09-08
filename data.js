@@ -263,20 +263,166 @@ function getTeamNamesByIds(ids) {
 
 /* ------------------------------------------------------------
    DEMO DATA (Beispiel laden)
+   Ein realistisches Beispiel pro Team — "Beispiel laden" wählt
+   automatisch das Beispiel des aktuell gewählten Teams (Fallback:
+   Sunrise Club, falls noch kein Team gewählt ist).
    ------------------------------------------------------------ */
-const DEMO_DATA = {
-  mode: "advanced",
-  teamId: "sunrise",
-  aufgabe: "Entwickle ein professionelles Barkonzept für den Sunrise Club.",
-  fachgebiet: "Barkonzept",
-  ziel: "Hohe Gästezufriedenheit, schnelle Serviceprozesse und wirtschaftlicher Barbetrieb.",
-  zielgruppe: "VIP-Gäste und Clubbesucher:innen des Sunrise VIP Cube, Freitag & Samstag Abend",
-  gaesteanzahl: "300",
-  phase: "phase3",
-  requirements: ["Hohe Servicegeschwindigkeit an der Bar", "Jugendschutz eingehalten", "Wirtschaftlicher Barbetrieb", "Attraktives Entertainment-Konzept"],
-  interfaces: ["fnb", "ops", "sponsoring", "marketing"],
-  riskModuleEnabled: true,
-  risks: ["Jugendschutz", "Stromausfall", "Überfüllung", "technische Probleme"],
-  outputFormats: ["Konzept", "Tabelle", "Risiko-Register"],
-  style: "professionell & sachlich"
+const DEMO_DATA_BY_TEAM = {
+
+  projektleitung: {
+    mode: "advanced",
+    teamId: "projektleitung",
+    aufgabe: "Erstelle eine RACI-Matrix für die Kernaufgaben des Sunrise VIP Cube bis zum Pitch vor den Herbstferien.",
+    fachgebiet: "Projektmanagement",
+    ziel: "Klare Verantwortlichkeiten zwischen allen Bereichen, damit die Projektleitung Engpässe frühzeitig erkennt.",
+    zielgruppe: "Alle Bereichsleitungen sowie die Projektleitung selbst",
+    gaesteanzahl: "",
+    phase: "phase3",
+    requirements: ["Klare Verantwortlichkeiten (RACI)", "Meilensteintreue", "Transparentes Reporting", "Frühzeitige Risikoerkennung"],
+    interfaces: ["fnb", "sunrise", "ops", "finance"],
+    riskModuleEnabled: true,
+    risks: ["Kommunikationsfehler", "Budgetüberschreitung", "fehlende Bewilligung", "Personalausfall"],
+    outputFormats: ["RACI-Matrix", "Roadmap"],
+    style: "formell (für Auftraggeber)"
+  },
+
+  fnb: {
+    mode: "advanced",
+    teamId: "fnb",
+    aufgabe: "Entwickle ein Cook-&-Chill-Produktionskonzept für das Dinner-Buffet am Samstag.",
+    fachgebiet: "Produktionsplanung",
+    ziel: "Sichere, wirtschaftliche und gästeorientierte Speisenproduktion trotz fehlender Vollküche vor Ort.",
+    zielgruppe: "VIP-Gäste im Obergeschoss, Samstagabend",
+    gaesteanzahl: "200",
+    phase: "phase4",
+    requirements: ["HACCP-konform", "Kalkuliert für Gästezahl", "Cook & Chill / Sous-vide tauglich", "Food-Waste-minimierend"],
+    interfaces: ["guest", "ops", "sustainability", "finance"],
+    riskModuleEnabled: true,
+    risks: ["Lieferverzögerung", "Hygiene", "fehlendes Material", "technische Probleme"],
+    outputFormats: ["Konzept", "SOP"],
+    style: "professionell & sachlich"
+  },
+
+  guest: {
+    mode: "advanced",
+    teamId: "guest",
+    aufgabe: "Gestalte die vollständige Customer Journey für den Welcome Event am Freitagabend.",
+    fachgebiet: "Customer Journey",
+    ziel: "Ein nahtloses, professionelles Gästeerlebnis vom Empfang bis zur Verabschiedung.",
+    zielgruppe: "VIP-Gäste, ca. 150 Personen, Freitag ab 17:30 Uhr",
+    gaesteanzahl: "150",
+    phase: "phase3",
+    requirements: ["Nahtlose Customer Journey", "Klare Briefings", "Hohe Servicegeschwindigkeit", "Konsistente Qualitätsstandards"],
+    interfaces: ["fnb", "sunrise", "marketing"],
+    riskModuleEnabled: true,
+    risks: ["Überfüllung", "Wartezeiten", "Personalausfall"],
+    outputFormats: ["Customer Journey", "Ablaufplan"],
+    style: "ausführlich & erklärend"
+  },
+
+  sunrise: {
+    mode: "advanced",
+    teamId: "sunrise",
+    aufgabe: "Entwickle ein professionelles Barkonzept für den Sunrise Club.",
+    fachgebiet: "Barkonzept",
+    ziel: "Hohe Gästezufriedenheit, schnelle Serviceprozesse und wirtschaftlicher Barbetrieb.",
+    zielgruppe: "VIP-Gäste und Clubbesucher:innen des Sunrise VIP Cube, Freitag & Samstag Abend",
+    gaesteanzahl: "300",
+    phase: "phase3",
+    requirements: ["Hohe Servicegeschwindigkeit an der Bar", "Jugendschutz eingehalten", "Wirtschaftlicher Barbetrieb", "Attraktives Entertainment-Konzept"],
+    interfaces: ["fnb", "ops", "sponsoring", "marketing"],
+    riskModuleEnabled: true,
+    risks: ["Jugendschutz", "Stromausfall", "Überfüllung", "technische Probleme"],
+    outputFormats: ["Konzept", "Tabelle", "Risiko-Register"],
+    style: "professionell & sachlich"
+  },
+
+  ops: {
+    mode: "advanced",
+    teamId: "ops",
+    aufgabe: "Erstelle einen Auf- und Abbauplan für Mittwoch und Donnerstag der Weltcup-Woche.",
+    fachgebiet: "Auf- & Abbau",
+    ziel: "Reibungsloser, termingerechter Aufbau von Küche, Bar und Hospitality-Bereich vor dem Live-Betrieb.",
+    zielgruppe: "Operations-Team und externe Lieferanten",
+    gaesteanzahl: "",
+    phase: "phase5",
+    requirements: ["Lückenlose Kühlkette", "Realistischer Zeitplan für Auf-/Abbau", "Materialliste vollständig", "Notfallkonzept vorhanden"],
+    interfaces: ["fnb", "sunrise", "finance"],
+    riskModuleEnabled: true,
+    risks: ["Lieferverzögerung", "Stromausfall", "fehlendes Material"],
+    outputFormats: ["Ablaufplan", "Checkliste"],
+    style: "kurz & prägnant"
+  },
+
+  marketing: {
+    mode: "advanced",
+    teamId: "marketing",
+    aufgabe: "Entwickle ein Kommunikationskonzept inkl. Content-Plan für Instagram bis zum Weltcup-Wochenende.",
+    fachgebiet: "Kommunikationskonzept",
+    ziel: "Hohe Sichtbarkeit des Sunrise VIP Cube und authentisches Storytelling entlang der Customer Journey.",
+    zielgruppe: "Instagram-Follower, Sponsoren, Ski-World-Cup-Publikum",
+    gaesteanzahl: "",
+    phase: "phase2",
+    requirements: ["Konsistentes Branding", "Klarer Redaktionsplan", "Storytelling entlang der Customer Journey", "Rechtzeitige Foto-/Videodokumentation"],
+    interfaces: ["sponsoring", "guest", "sunrise"],
+    riskModuleEnabled: true,
+    risks: ["Kommunikationsfehler", "Sponsor-Konflikte"],
+    outputFormats: ["Roadmap", "Präsentationsstruktur"],
+    style: "motivierend & teamorientiert"
+  },
+
+  sponsoring: {
+    mode: "advanced",
+    teamId: "sponsoring",
+    aufgabe: "Erstelle Sponsoring-Pakete (Gold / Silber / Bronze) mit klaren Gegenleistungen für den Sunrise VIP Cube.",
+    fachgebiet: "Sponsorensuche",
+    ziel: "Ausreichend Sponsoringeinnahmen sichern, ohne das Markenbild der Hotelfachschule Thun zu verwässern.",
+    zielgruppe: "Potenzielle Sponsoringpartner",
+    gaesteanzahl: "",
+    phase: "phase2",
+    requirements: ["Klare Sponsoring-Pakete", "Verbindliche Gegenleistungen", "Abstimmung mit Branding-Richtlinien", "Rechtzeitiger Vertragsabschluss"],
+    interfaces: ["marketing", "finance", "ops"],
+    riskModuleEnabled: true,
+    risks: ["Sponsor-Konflikte", "Budgetüberschreitung", "Kommunikationsfehler"],
+    outputFormats: ["Konzept", "Tabelle"],
+    style: "formell (für Auftraggeber)"
+  },
+
+  sustainability: {
+    mode: "advanced",
+    teamId: "sustainability",
+    aufgabe: "Entwickle ein Food-Waste- und Mehrweg-Konzept für den gesamten Sunrise VIP Cube.",
+    fachgebiet: "Kreislaufwirtschaft",
+    ziel: "Messbare Reduktion von Food Waste und hoher Mehrweganteil bei gleichbleibender Gästequalität.",
+    zielgruppe: "Alle operativen Teams (F&B, Guest Experience, Sunrise Club, Operations)",
+    gaesteanzahl: "",
+    phase: "phase4",
+    requirements: ["Messbare Nachhaltigkeits-KPIs", "Mehrweg vor Einweg", "HACCP-konforme Prozesse", "Food-Waste-Reduktion dokumentiert"],
+    interfaces: ["fnb", "ops", "sunrise"],
+    riskModuleEnabled: true,
+    risks: ["Hygiene", "Budgetüberschreitung"],
+    outputFormats: ["KPI-Dashboard", "Konzept"],
+    style: "professionell & sachlich"
+  },
+
+  finance: {
+    mode: "advanced",
+    teamId: "finance",
+    aufgabe: "Erstelle eine Budget-Forecast-Ist-Übersicht für Food, Beverage, Operations und Marketing.",
+    fachgebiet: "Budgetplanung",
+    ziel: "Vollständige finanzielle Transparenz und frühzeitige Erkennung von Budgetabweichungen.",
+    zielgruppe: "Projektleitung und Lenkungsausschuss",
+    gaesteanzahl: "",
+    phase: "phase4",
+    requirements: ["Transparente Budget-Forecast-Ist-Übersicht", "Freigabeprozess eingehalten", "Reserven eingeplant", "Nachvollziehbare Kalkulation"],
+    interfaces: ["fnb", "sunrise", "sponsoring"],
+    riskModuleEnabled: true,
+    risks: ["Budgetüberschreitung", "fehlende Bewilligung"],
+    outputFormats: ["Budget", "KPI-Dashboard"],
+    style: "formell (für Auftraggeber)"
+  }
+
 };
+
+// Backwards-compatible alias (older code / external references).
+const DEMO_DATA = DEMO_DATA_BY_TEAM.sunrise;

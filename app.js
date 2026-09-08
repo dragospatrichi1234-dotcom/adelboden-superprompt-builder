@@ -50,6 +50,19 @@
   let aiRequestInFlight = false;
   let fileIdCounter = 0;
 
+  // Team-Board: shared, persistent (Netlify Blobs) data — always fetched
+  // fresh from the server, never stored in the local `state`/localStorage.
+  const BOARD_PASSWORD_SESSION_KEY = "adelboden2027_board_password";
+  let boardDeadlines = [];
+  let boardFiles = [];
+  let boardDeadlinesLoaded = false;
+  let boardUnlocked = false;
+  let boardEditPassword = "";
+  let deadlineTeamFilterValue = "all";
+  let pendingDeadlineTeamIds = [];
+  let pendingSharedFileTeamIds = [];
+  let selectedSharedFile = null;
+
   /* ---------------------------------------------------------
      PERSISTENCE
      --------------------------------------------------------- */
@@ -157,14 +170,22 @@
       "scoreRing", "scoreRingProgress", "scoreNumber", "scoreLabel", "scoreSuggestions",
       "promptOutput", "copyBtn", "exportTxtBtn", "exportMdBtn", "toast",
       "filesToggle", "filesBody", "uploadConsent", "dropzone", "fileInput",
-      "fileSelectBtn", "fileList", "knowledgeBaseList",
+      "fileSelectBtn", "fileList",
       "aiModeSelect", "aiModeHint", "contextCharCount", "aiGenerateBtn",
       "promptOverrideBadge", "revertOverrideBtn",
       "aiResultToggle", "aiResultBody", "aiModelStatus",
       "aiLoading", "aiLoadingText", "aiError",
       "aiCompare", "aiCompareOriginal", "aiCompareOptimized", "aiAcceptBtn", "aiDiscardBtn",
       "aiAnswerWrap", "aiAnswer", "aiCopyBtn", "aiExportMdBtn", "aiRegenerateBtn", "aiClearBtn",
-      "aiEmptyHint"
+      "aiEmptyHint",
+      "navBuilderBtn", "navBoardBtn", "builderPage", "boardPage", "goToBoardFilesBtn",
+      "editLock", "editLockStatus", "unlockPasswordInput", "unlockEditBtn", "unlockConfirmBtn",
+      "deadlineTeamFilter", "deadlineList", "deadlineEmptyHint", "addDeadlineBtn",
+      "deadlineForm", "deadlineTitleInput", "deadlineDateInput", "deadlineTeamChips",
+      "deadlineDescInput", "deadlineSaveBtn", "deadlineCancelBtn",
+      "sharedFileList", "sharedFileEmptyHint", "showSharedFileFormBtn",
+      "sharedFileUploadForm", "sharedFileInput", "sharedFileSelectBtn", "sharedFileSelectedName",
+      "sharedFileDescInput", "sharedFileTeamChips", "sharedFileUploadBtn", "sharedFileCancelBtn"
     ].forEach(id => { el[id] = document.getElementById(id); });
   }
 
@@ -673,23 +694,6 @@
     bodyEl.classList.remove("hidden");
   }
 
-  /* ---------------------------------------------------------
-     PROJEKTWISSEN (offizielle Wissensbasis — Version 1: Anzeige)
-     --------------------------------------------------------- */
-
-  function renderKnowledgeBase() {
-    el.knowledgeBaseList.innerHTML = "";
-    PROJECT_KNOWLEDGE_BASE.forEach(doc => {
-      const card = document.createElement("div");
-      card.className = "knowledge-item" + (doc.status === "planned" ? " is-planned" : "");
-      card.innerHTML = `
-        <div class="knowledge-item-title">${escapeHtml(doc.title)}</div>
-        <div class="knowledge-item-desc">${escapeHtml(doc.description)}</div>
-        <span class="knowledge-item-tag">${doc.status === "planned" ? "Geplant" : "Verfügbar (Referenz)"}</span>
-      `;
-      el.knowledgeBaseList.appendChild(card);
-    });
-  }
 
   /* ---------------------------------------------------------
      FILE UPLOAD (Projektdateien als Kontext)
@@ -915,6 +919,15 @@
 
     const promptText = getActivePromptText();
     const filesPayload = buildFilesPayload();
+
+    if (!boardDeadlinesLoaded) {
+      try { await loadBoardData(); } catch (e) { /* AI call still works without deadline context */ }
+    }
+    const deadlinesBlock = buildDeadlinesContextBlock();
+    if (deadlinesBlock) {
+      filesPayload.push({ name: "Team-Board Deadlines", kind: "text", text: deadlinesBlock });
+    }
+
     const approxChars = promptText.length + filesPayload.reduce((s, f) => s + (f.text ? f.text.length : 0), 0);
 
     if (approxChars > 20000) {
@@ -966,6 +979,376 @@
       el.aiGenerateBtn.textContent = "Mit KI generieren";
       updateAiModeHint();
     }
+  }
+
+  /* ---------------------------------------------------------
+     TEAM-BOARD (shared deadlines & shared project files)
+     --------------------------------------------------------- */
+
+  function switchTopNav(view) {
+    const isBoard = view === "board";
+    el.navBuilderBtn.classList.toggle("is-active", !isBoard);
+    el.navBoardBtn.classList.toggle("is-active", isBoard);
+    el.builderPage.classList.toggle("hidden", isBoard);
+    el.boardPage.classList.toggle("hidden", !isBoard);
+    if (isBoard && !boardDeadlinesLoaded) {
+      loadBoardData();
+    }
+  }
+
+  async function postBoard(body) {
+    const res = await fetch("/.netlify/functions/shared-board", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    let data;
+    try { data = await res.json(); } catch (e) { throw new Error("bad_response"); }
+    return { httpOk: res.ok, data };
+  }
+
+  // Always fetches fresh from the server (deadlines can change at any time,
+  // added by other teams) — used both by the board page and, separately,
+  // right before every AI call so the AI never sees stale deadlines.
+  async function fetchDeadlinesFresh() {
+    const { data } = await postBoard({ resource: "deadlines", op: "list" });
+    if (data && data.ok) boardDeadlines = data.items || [];
+    boardDeadlinesLoaded = true;
+    return boardDeadlines;
+  }
+
+  async function loadBoardData() {
+    try {
+      const [, fl] = await Promise.all([
+        fetchDeadlinesFresh(),
+        postBoard({ resource: "files", op: "list" })
+      ]);
+      if (fl.data && fl.data.ok) boardFiles = fl.data.items || [];
+      renderDeadlines();
+      renderSharedFiles();
+    } catch (e) {
+      showToast("Team-Board konnte nicht geladen werden (Netzwerkfehler).");
+    }
+  }
+
+  function renderDeadlineTeamFilter() {
+    el.deadlineTeamFilter.innerHTML = "";
+    const allOpt = document.createElement("option");
+    allOpt.value = "all";
+    allOpt.textContent = "Alle Teams";
+    el.deadlineTeamFilter.appendChild(allOpt);
+    TEAMS.forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.icon + " " + t.name;
+      el.deadlineTeamFilter.appendChild(opt);
+    });
+    el.deadlineTeamFilter.value = deadlineTeamFilterValue;
+  }
+
+  function formatDeadlineDate(dateStr) {
+    if (!dateStr) return { day: "–", month: "" };
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return { day: "–", month: "" };
+    return { day: String(d.getDate()), month: d.toLocaleDateString("de-DE", { month: "short" }).replace(".", "") };
+  }
+
+  function deadlineUrgencyClass(dateStr, status) {
+    if (status === "erledigt") return "is-done";
+    if (!dateStr) return "";
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return "";
+    const diffDays = Math.round((d - today) / 86400000);
+    if (diffDays < 0) return "is-overdue";
+    if (diffDays <= 7) return "is-soon";
+    return "";
+  }
+
+  function renderDeadlines() {
+    const filtered = deadlineTeamFilterValue === "all"
+      ? boardDeadlines
+      : boardDeadlines.filter(d => (d.teamIds || []).includes(deadlineTeamFilterValue) || (d.teamIds || []).length === 0);
+
+    el.deadlineList.innerHTML = "";
+    el.deadlineEmptyHint.classList.toggle("hidden", filtered.length > 0);
+
+    filtered.forEach(d => {
+      const { day, month } = formatDeadlineDate(d.date);
+      const urgency = deadlineUrgencyClass(d.date, d.status);
+      const row = document.createElement("div");
+      row.className = "deadline-card" + (urgency ? " " + urgency : "");
+      const teamNames = getTeamNamesByIds(d.teamIds || []);
+      row.innerHTML = `
+        <div class="deadline-date-badge"><span class="dd-day">${day}</span><span class="dd-month">${month}</span></div>
+        <div class="deadline-info">
+          <div class="deadline-title${d.status === "erledigt" ? " is-done-text" : ""}">${escapeHtml(d.title)}</div>
+          <div class="deadline-meta">${d.date || "kein Datum"}</div>
+          ${d.description ? `<div class="deadline-desc">${escapeHtml(d.description)}</div>` : ""}
+          ${teamNames.length ? `<div class="deadline-teams">${teamNames.map(n => `<span class="deadline-team-tag">${escapeHtml(n)}</span>`).join("")}</div>` : ""}
+        </div>
+      `;
+      const actions = document.createElement("div");
+      actions.className = "deadline-actions";
+
+      const statusBtn = document.createElement("button");
+      statusBtn.type = "button";
+      statusBtn.className = "deadline-status-toggle" + (d.status === "erledigt" ? " is-done" : "");
+      statusBtn.textContent = d.status === "erledigt" ? "✓ Erledigt" : "Offen";
+      statusBtn.disabled = !boardUnlocked;
+      statusBtn.title = boardUnlocked ? "Status umschalten" : "Bearbeitung zuerst entsperren";
+      statusBtn.addEventListener("click", () => toggleDeadlineStatus(d));
+      actions.appendChild(statusBtn);
+
+      if (boardUnlocked) {
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "deadline-delete-btn";
+        delBtn.textContent = "✕ Löschen";
+        delBtn.addEventListener("click", () => deleteDeadline(d.id));
+        actions.appendChild(delBtn);
+      }
+
+      row.appendChild(actions);
+      el.deadlineList.appendChild(row);
+    });
+  }
+
+  async function toggleDeadlineStatus(d) {
+    const newStatus = d.status === "erledigt" ? "offen" : "erledigt";
+    const { data } = await postBoard({ resource: "deadlines", op: "update", editPassword: boardEditPassword, id: d.id, data: { status: newStatus } });
+    if (data && data.ok) {
+      d.status = newStatus;
+      renderDeadlines();
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  async function deleteDeadline(id) {
+    if (!confirm("Diese Deadline wirklich löschen?")) return;
+    const { data } = await postBoard({ resource: "deadlines", op: "delete", editPassword: boardEditPassword, id });
+    if (data && data.ok) {
+      boardDeadlines = boardDeadlines.filter(d => d.id !== id);
+      renderDeadlines();
+      showToast("Deadline gelöscht.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  function humanFileSizeBoard(bytes) { return humanFileSize(bytes); }
+
+  function renderSharedFiles() {
+    el.sharedFileList.innerHTML = "";
+    el.sharedFileEmptyHint.classList.toggle("hidden", boardFiles.length > 0);
+
+    boardFiles.forEach(f => {
+      const row = document.createElement("div");
+      row.className = "file-item";
+      const teamNames = getTeamNamesByIds(f.teamIds || []);
+      row.innerHTML = `
+        <span class="file-item-icon">📄</span>
+        <span class="file-item-info">
+          <span class="file-item-name">${escapeHtml(f.name)}</span>
+          <span class="file-item-meta">${humanFileSizeBoard(f.size)}${f.description ? " · " + escapeHtml(f.description) : ""}</span>
+          ${teamNames.length ? `<div class="deadline-teams">${teamNames.map(n => `<span class="deadline-team-tag">${escapeHtml(n)}</span>`).join("")}</div>` : ""}
+        </span>
+      `;
+      const dl = document.createElement("a");
+      dl.href = `/.netlify/functions/shared-file-download?id=${encodeURIComponent(f.id)}`;
+      dl.className = "btn btn-small";
+      dl.textContent = "⬇ Download";
+      dl.setAttribute("download", f.name);
+      row.appendChild(dl);
+
+      if (boardUnlocked) {
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "file-item-remove";
+        delBtn.setAttribute("aria-label", "Löschen");
+        delBtn.textContent = "✕";
+        delBtn.addEventListener("click", () => deleteSharedFile(f.id));
+        row.appendChild(delBtn);
+      }
+      el.sharedFileList.appendChild(row);
+    });
+  }
+
+  async function deleteSharedFile(id) {
+    if (!confirm("Diese Datei wirklich löschen? Das kann nicht rückgängig gemacht werden.")) return;
+    const { data } = await postBoard({ resource: "files", op: "delete", editPassword: boardEditPassword, id });
+    if (data && data.ok) {
+      boardFiles = boardFiles.filter(f => f.id !== id);
+      renderSharedFiles();
+      showToast("Datei gelöscht.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  function handleBoardWriteError(data) {
+    if (data && data.code === "not_configured") {
+      showToast("Bearbeitung ist noch nicht konfiguriert (Administrator muss BOARD_EDIT_PASSWORD setzen).");
+    } else if (data && data.code === "wrong_password") {
+      showToast("Falsches Passwort — Bearbeitung wird zurückgesetzt.");
+      lockBoard();
+    } else {
+      showToast((data && data.message) || "Aktion fehlgeschlagen.");
+    }
+  }
+
+  function lockBoard() {
+    boardUnlocked = false;
+    boardEditPassword = "";
+    try { sessionStorage.removeItem(BOARD_PASSWORD_SESSION_KEY); } catch (e) { /* ignore */ }
+    el.editLock.classList.remove("is-unlocked");
+    el.editLockStatus.textContent = "🔒 Nur Lesen";
+    el.unlockEditBtn.classList.remove("hidden");
+    el.unlockConfirmBtn.classList.add("hidden");
+    el.unlockPasswordInput.classList.add("hidden");
+    el.unlockPasswordInput.value = "";
+    el.addDeadlineBtn.disabled = true;
+    el.showSharedFileFormBtn.disabled = true;
+    renderDeadlines();
+    renderSharedFiles();
+  }
+
+  function unlockBoardUi() {
+    boardUnlocked = true;
+    el.editLock.classList.add("is-unlocked");
+    el.editLockStatus.textContent = "🔓 Bearbeitung aktiv";
+    el.unlockEditBtn.classList.add("hidden");
+    el.unlockConfirmBtn.classList.add("hidden");
+    el.unlockPasswordInput.classList.add("hidden");
+    el.addDeadlineBtn.disabled = false;
+    el.showSharedFileFormBtn.disabled = false;
+    renderDeadlines();
+    renderSharedFiles();
+  }
+
+  async function tryUnlockBoard(password, { silent } = {}) {
+    const { data } = await postBoard({ resource: "auth", op: "check", editPassword: password });
+    if (data && data.ok) {
+      boardEditPassword = password;
+      try { sessionStorage.setItem(BOARD_PASSWORD_SESSION_KEY, password); } catch (e) { /* ignore */ }
+      unlockBoardUi();
+      if (!silent) showToast("Bearbeitung entsperrt.");
+      return true;
+    }
+    if (!silent) handleBoardWriteError(data);
+    return false;
+  }
+
+  // Standalone team-chip picker for the board forms (deliberately separate
+  // from renderChipGroup(), which is wired to the main prompt-builder state
+  // and always triggers renderAll()/saveState() — wrong here).
+  function renderTeamChipPicker(container, selectedIds) {
+    container.innerHTML = "";
+    TEAMS.forEach(t => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip" + (selectedIds.includes(t.id) ? " is-selected" : "");
+      btn.textContent = t.name;
+      btn.addEventListener("click", () => {
+        toggleInArray(selectedIds, t.id);
+        renderTeamChipPicker(container, selectedIds);
+      });
+      container.appendChild(btn);
+    });
+  }
+
+  function resetDeadlineForm() {
+    el.deadlineTitleInput.value = "";
+    el.deadlineDateInput.value = "";
+    el.deadlineDescInput.value = "";
+    pendingDeadlineTeamIds = [];
+    renderTeamChipPicker(el.deadlineTeamChips, pendingDeadlineTeamIds);
+  }
+
+  async function saveDeadline() {
+    const title = el.deadlineTitleInput.value.trim();
+    if (!title) { showToast("Bitte einen Titel eingeben."); return; }
+    const payload = {
+      title,
+      date: el.deadlineDateInput.value || "",
+      teamIds: [...pendingDeadlineTeamIds],
+      description: el.deadlineDescInput.value.trim()
+    };
+    const { data } = await postBoard({ resource: "deadlines", op: "create", editPassword: boardEditPassword, data: payload });
+    if (data && data.ok) {
+      boardDeadlines.push(data.item);
+      boardDeadlines.sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
+      renderDeadlines();
+      el.deadlineForm.classList.add("hidden");
+      resetDeadlineForm();
+      showToast("Deadline gespeichert.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  function resetSharedFileForm() {
+    selectedSharedFile = null;
+    el.sharedFileInput.value = "";
+    el.sharedFileSelectedName.textContent = "Keine Datei gewählt";
+    el.sharedFileDescInput.value = "";
+    pendingSharedFileTeamIds = [];
+    renderTeamChipPicker(el.sharedFileTeamChips, pendingSharedFileTeamIds);
+    el.sharedFileUploadBtn.disabled = true;
+  }
+
+  const SHARED_FILE_MAX_BYTES = 4 * 1024 * 1024;
+
+  function handleSharedFileSelected(file) {
+    if (!file) return;
+    if (file.size === 0) { showToast("Datei ist leer."); return; }
+    if (file.size > SHARED_FILE_MAX_BYTES) { showToast(`Datei zu gross (max. ${Math.round(SHARED_FILE_MAX_BYTES / 1024 / 1024)} MB).`); return; }
+    selectedSharedFile = file;
+    el.sharedFileSelectedName.textContent = `${file.name} (${humanFileSize(file.size)})`;
+    el.sharedFileUploadBtn.disabled = false;
+  }
+
+  function uploadSharedFile() {
+    if (!selectedSharedFile) { showToast("Bitte zuerst eine Datei auswählen."); return; }
+    const file = selectedSharedFile;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = String(reader.result || "").split(",")[1] || "";
+      const payload = {
+        name: file.name,
+        mime: file.type || "application/octet-stream",
+        base64,
+        teamIds: [...pendingSharedFileTeamIds],
+        description: el.sharedFileDescInput.value.trim()
+      };
+      const { data } = await postBoard({ resource: "files", op: "upload", editPassword: boardEditPassword, data: payload });
+      if (data && data.ok) {
+        boardFiles.unshift(data.item);
+        renderSharedFiles();
+        el.sharedFileUploadForm.classList.add("hidden");
+        resetSharedFileForm();
+        showToast("Datei hochgeladen.");
+      } else {
+        handleBoardWriteError(data);
+      }
+    };
+    reader.onerror = () => showToast("Datei konnte nicht gelesen werden.");
+    reader.readAsDataURL(file);
+  }
+
+  // Builds a compact, always-cheap "current deadlines" text block used as
+  // extra AI context — separate from the heavier optional file uploads.
+  function buildDeadlinesContextBlock() {
+    if (!boardDeadlines.length) return null;
+    const relevant = boardDeadlines.filter(d => d.status !== "erledigt");
+    if (!relevant.length) return null;
+    const lines = relevant.slice(0, 25).map(d => {
+      const teamNames = getTeamNamesByIds(d.teamIds || []);
+      const teamPart = teamNames.length ? ` [${teamNames.join(", ")}]` : "";
+      return `- ${d.date || "kein Datum"}: ${d.title}${teamPart}`;
+    });
+    return "Aktuelle offene Deadlines (Team-Board):\n" + lines.join("\n");
   }
 
   /* ---------------------------------------------------------
@@ -1032,24 +1415,26 @@
   }
 
   function loadDemo() {
-    selectTeam(DEMO_DATA.teamId);
-    state.mode = DEMO_DATA.mode;
-    state.aufgabe = DEMO_DATA.aufgabe;
-    state.fachgebiet = DEMO_DATA.fachgebiet;
-    state.ziel = DEMO_DATA.ziel;
-    state.zielgruppe = DEMO_DATA.zielgruppe;
-    state.gaesteanzahl = DEMO_DATA.gaesteanzahl;
-    state.phase = DEMO_DATA.phase;
-    state.requirements = [...DEMO_DATA.requirements];
-    DEMO_DATA.requirements.forEach(r => { if (!state.requirementPool.includes(r)) state.requirementPool.push(r); });
-    state.interfaces = [...DEMO_DATA.interfaces];
-    state.riskModuleEnabled = DEMO_DATA.riskModuleEnabled;
-    state.risks = [...DEMO_DATA.risks];
-    state.outputFormats = [...DEMO_DATA.outputFormats];
-    state.style = DEMO_DATA.style;
+    const demo = DEMO_DATA_BY_TEAM[state.teamId] || DEMO_DATA_BY_TEAM.sunrise;
+    selectTeam(demo.teamId);
+    state.mode = demo.mode;
+    state.aufgabe = demo.aufgabe;
+    state.fachgebiet = demo.fachgebiet;
+    state.ziel = demo.ziel;
+    state.zielgruppe = demo.zielgruppe;
+    state.gaesteanzahl = demo.gaesteanzahl;
+    state.phase = demo.phase;
+    state.requirements = [...demo.requirements];
+    demo.requirements.forEach(r => { if (!state.requirementPool.includes(r)) state.requirementPool.push(r); });
+    state.interfaces = [...demo.interfaces];
+    state.riskModuleEnabled = demo.riskModuleEnabled;
+    state.risks = [...demo.risks];
+    state.outputFormats = [...demo.outputFormats];
+    state.style = demo.style;
     renderAll();
     saveState();
-    showToast("Beispiel geladen: Sunrise Club Barkonzept.");
+    const teamName = getTeamById(demo.teamId).name;
+    showToast(`Beispiel geladen: ${teamName}.`);
   }
 
   /* ---------------------------------------------------------
@@ -1153,6 +1538,56 @@
     el.aiExportMdBtn.addEventListener("click", exportAiAnswerMd);
     el.aiRegenerateBtn.addEventListener("click", () => { if (state.lastAiTask) callAi(state.lastAiTask); });
     el.aiClearBtn.addEventListener("click", clearAiResult);
+
+    // --- Top nav ---
+    el.navBuilderBtn.addEventListener("click", () => switchTopNav("builder"));
+    el.navBoardBtn.addEventListener("click", () => switchTopNav("board"));
+    el.goToBoardFilesBtn.addEventListener("click", () => switchTopNav("board"));
+
+    // --- Team-Board: unlock ---
+    el.unlockEditBtn.addEventListener("click", () => {
+      el.unlockPasswordInput.classList.remove("hidden");
+      el.unlockConfirmBtn.classList.remove("hidden");
+      el.unlockPasswordInput.focus();
+    });
+    el.unlockConfirmBtn.addEventListener("click", () => {
+      const pw = el.unlockPasswordInput.value;
+      if (!pw) return;
+      tryUnlockBoard(pw);
+    });
+    el.unlockPasswordInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); el.unlockConfirmBtn.click(); }
+    });
+
+    // --- Team-Board: deadlines ---
+    el.deadlineTeamFilter.addEventListener("change", () => {
+      deadlineTeamFilterValue = el.deadlineTeamFilter.value;
+      renderDeadlines();
+    });
+    el.addDeadlineBtn.addEventListener("click", () => {
+      resetDeadlineForm();
+      el.deadlineForm.classList.remove("hidden");
+    });
+    el.deadlineSaveBtn.addEventListener("click", saveDeadline);
+    el.deadlineCancelBtn.addEventListener("click", () => {
+      el.deadlineForm.classList.add("hidden");
+      resetDeadlineForm();
+    });
+
+    // --- Team-Board: shared files ---
+    el.showSharedFileFormBtn.addEventListener("click", () => {
+      resetSharedFileForm();
+      el.sharedFileUploadForm.classList.remove("hidden");
+    });
+    el.sharedFileSelectBtn.addEventListener("click", () => el.sharedFileInput.click());
+    el.sharedFileInput.addEventListener("change", () => {
+      if (el.sharedFileInput.files.length) handleSharedFileSelected(el.sharedFileInput.files[0]);
+    });
+    el.sharedFileUploadBtn.addEventListener("click", uploadSharedFile);
+    el.sharedFileCancelBtn.addEventListener("click", () => {
+      el.sharedFileUploadForm.classList.add("hidden");
+      resetSharedFileForm();
+    });
   }
 
   /* ---------------------------------------------------------
@@ -1166,7 +1601,6 @@
     const loaded = loadState();
     if (loaded) state = loaded;
 
-    renderKnowledgeBase();
     syncUploadConsentUi();
     renderAiModeOptions();
 
@@ -1175,6 +1609,15 @@
     if (state.aiOptimizedPrompt) { renderAiCompare(); expandCollapsible(el.aiResultToggle, el.aiResultBody); }
     if (state.aiResult) { renderAiAnswer(); expandCollapsible(el.aiResultToggle, el.aiResultBody); }
     if (state.aiResultModel) el.aiModelStatus.textContent = `Modell: ${state.aiResultModel}`;
+
+    // Team-Board setup (page itself stays hidden until the user opens the tab)
+    renderDeadlineTeamFilter();
+    renderTeamChipPicker(el.deadlineTeamChips, pendingDeadlineTeamIds);
+    renderTeamChipPicker(el.sharedFileTeamChips, pendingSharedFileTeamIds);
+    try {
+      const savedPw = sessionStorage.getItem(BOARD_PASSWORD_SESSION_KEY);
+      if (savedPw) tryUnlockBoard(savedPw, { silent: true });
+    } catch (e) { /* sessionStorage unavailable — stay locked */ }
   }
 
   document.addEventListener("DOMContentLoaded", init);

@@ -8,22 +8,27 @@ Die Prompt-Erstellung selbst ist eine **reine Client-Anwendung** – kein Backen
 
 Optional gibt es eine **serverseitige KI-Integration** (OpenAI): der fertige Superprompt kann direkt an eine KI gesendet werden — der OpenAI API-Key liegt dabei ausschliesslich serverseitig in einer Netlify-Umgebungsvariable und erreicht den Browser nie. Ohne konfigurierten Key funktioniert der Prompt Builder unverändert vollständig ohne KI-Aufruf.
 
+Zusätzlich gibt es ein **Team-Board** (zweiter Tab oben): geteilte, für alle Teams sichtbare Deadlines und geteilte Projektdateien — zentral gespeichert (Netlify Blobs), nicht mehr nur lokal im Browser. Lesen ist für alle offen; Hinzufügen/Bearbeiten/Löschen ist mit einem gemeinsamen Bearbeitungs-Passwort geschützt. Deadlines fliessen automatisch als Kontext in jede KI-Generierung ein.
+
 ## Dateien
 
 | Datei | Zweck |
 |---|---|
-| `index.html` | Struktur, Meta-Tags, Favicon |
+| `index.html` | Struktur, Meta-Tags, Favicon, Superprompt-Builder- und Team-Board-Seite |
 | `style.css` | Design-System (Swiss Hospitality / Event-Look) |
-| `data.js` | Projektdaten: Teams, Presets, Risiken, Output-Formate, Demo-Daten, KI-Konfiguration (Modell-Label, Limits, Projektwissen) |
-| `app.js` | Anwendungslogik: State, Rendering, Prompt-Generierung, Score, Export, Datei-Upload, KI-Aufrufe |
+| `data.js` | Projektdaten: Teams, Presets, Risiken, Output-Formate, Demo-Daten, KI-Konfiguration |
+| `app.js` | Anwendungslogik: State, Rendering, Prompt-Generierung, Score, Export, Datei-Upload, KI-Aufrufe, Team-Board |
 | `netlify/functions/generate-ai.mjs` | Netlify Function: serverseitiger, sicherer Aufruf der OpenAI Responses API (liest `OPENAI_API_KEY`, extrahiert DOCX-Text dependency-frei, reicht PDFs nativ an OpenAI weiter) |
+| `netlify/functions/shared-board.mjs` | Netlify Function: CRUD für geteilte Deadlines & Datei-Metadaten (Netlify Blobs), Lesen offen, Schreiben mit `BOARD_EDIT_PASSWORD` geschützt |
+| `netlify/functions/shared-file-download.mjs` | Netlify Function: liefert geteilte Dateien zum Download aus (öffentlich lesbar) |
+| `package.json` | Einzige npm-Abhängigkeit: `@netlify/blobs` (offizielles, first-party Netlify-Paket für die geteilte Speicherung) |
 | `netlify.toml` | Deployment-Konfiguration für Netlify (Header, Caching, Functions-Verzeichnis) |
-| `vercel.json` | Deployment-Konfiguration für Vercel (Header, Caching) — **ohne** die KI-Function (siehe Hinweis unten) |
+| `vercel.json` | Deployment-Konfiguration für Vercel (Header, Caching) — **ohne** KI-Function und Team-Board (siehe Hinweis unten) |
 | `.claude/launch.json` | Nur für lokale Entwicklung: startet einen einfachen Ruby-Testserver |
 
-Es gibt **keinen Build-Schritt und keine npm-Abhängigkeiten** — auch `generate-ai.mjs` nutzt ausschliesslich in Node eingebaute Module (`node:zlib`) und die globale `fetch`-API.
+**Kein manueller Build-Schritt nötig** — Netlify installiert `@netlify/blobs` beim Deploy automatisch (Standard-Verhalten, sobald ein `package.json` im Repo liegt). `generate-ai.mjs` selbst bleibt weiterhin abhängigkeitsfrei (nur `node:zlib` + globale `fetch`-API).
 
-**Wichtig:** Die KI-Funktion ist als **Netlify Function** gebaut. Bei Deployment auf GitHub Pages (rein statisch, keine Functions) oder Vercel (anderes Function-Format) steht der Prompt Builder vollständig zur Verfügung, aber der Button „Mit KI generieren“ funktioniert nur auf Netlify.
+**Wichtig:** KI-Integration und Team-Board sind als **Netlify Functions** gebaut. Bei Deployment auf GitHub Pages (rein statisch, keine Functions) oder Vercel (anderes Function-Format, keine Blobs-Anbindung vorbereitet) steht der Prompt Builder vollständig zur Verfügung, aber „Mit KI generieren“ und das Team-Board funktionieren nur auf Netlify.
 
 ## Lokal öffnen
 
@@ -84,6 +89,20 @@ Der Button „Mit KI generieren“ funktioniert erst, wenn auf Netlify ein OpenA
 
 Das verwendete Modell ist in `netlify/functions/generate-ai.mjs` als zentrale Konstante `OPENAI_MODEL` (aktuell `gpt-4o-mini`) hinterlegt und kann dort jederzeit angepasst werden.
 
+## Team-Board konfigurieren (Bearbeitungs-Passwort)
+
+Das Team-Board (Tab „📅 Team-Board“) zeigt Deadlines und geteilte Dateien für **alle** Nutzer:innen offen an — dafür ist keine Konfiguration nötig. Um Deadlines/Dateien **hinzuzufügen, zu bearbeiten oder zu löschen**, braucht es ein gemeinsames Passwort:
+
+1. Netlify → **Site configuration → Environment variables → Add a variable**
+2. Key: `BOARD_EDIT_PASSWORD`
+3. Value: ein Passwort eurer Wahl (z. B. `adelboden2027-team`) — dieses Passwort gebt ihr allen Teams weiter, die bearbeiten dürfen sollen
+4. **Deploys → Trigger deploy → Deploy site**
+5. Testen: Team-Board öffnen → **„Bearbeitung entsperren“** → Passwort eingeben → **„+ Deadline hinzufügen“** sollte jetzt anklickbar sein
+
+**Wichtig — auch dieses Passwort niemals im Code/GitHub eintragen**, nur in der Netlify-Umgebungsvariable. Ohne konfiguriertes `BOARD_EDIT_PASSWORD` bleibt das Team-Board les- aber nicht editierbar, mit einem klaren Hinweis statt eines Fehlers.
+
+Das Passwort wird pro Browser-Tab-Sitzung gemerkt (`sessionStorage`) — nach dem Entsperren muss es nicht bei jeder Aktion erneut eingegeben werden, aber nach Schliessen des Tabs schon wieder.
+
 ## Einbindung in Microsoft Teams
 
 Nach dem Deployment kann die permanente HTTPS-URL direkt als **Website-Tab** in einem Teams-Kanal hinzugefügt werden (Tab **„+“ → Website → URL einfügen**). `netlify.toml` / `vercel.json` setzen bewusst keine restriktive `X-Frame-Options`, sondern eine `Content-Security-Policy: frame-ancestors`, die die Einbettung durch Microsoft-Teams-Domains explizit erlaubt.
@@ -100,6 +119,20 @@ Nach dem Deployment kann die permanente HTTPS-URL direkt als **Website-Tab** in 
 Alle Prompt-Builder-Eingaben werden ausschliesslich lokal im Browser des jeweiligen Nutzers gespeichert (`localStorage`). Hochgeladene Dateien werden **nicht** in `localStorage` gespeichert — sie liegen nur im Arbeitsspeicher der aktuellen Sitzung und werden ausschliesslich bei einem KI-Aufruf einmalig an die Netlify Function und von dort an OpenAI übermittelt (keine dauerhafte Speicherung serverseitig).
 
 Es dürfen keine echten Gäste-, Mitarbeiter-, Kunden-, Gesundheits-, Zahlungs- oder anderen sensiblen Personendaten in Prompts oder hochgeladene Dateien eingegeben werden. Vor dem ersten Datei-Upload muss dies aktiv per Checkbox bestätigt werden. KI-Ergebnisse müssen vor operativer Verwendung von einem Teammitglied geprüft werden.
+
+Team-Board-Deadlines und geteilte Dateien sind **absichtlich für alle offen lesbar** (Transparenz-Prinzip) und dauerhaft in Netlify Blobs gespeichert — auch hier gilt: keine sensiblen Personendaten in Titel, Beschreibung oder hochgeladenen Dateien.
+
+## Team-Board: Umfang & geplanter nächster Ausbauschritt
+
+Die aktuelle Version deckt **Deadlines** (mit Team-Zuordnung, Status offen/erledigt, Fälligkeits-Hervorhebung) und **geteilte Projektdateien** (zentral gespeichert, für alle herunterladbar) ab — passwortgeschützte Bearbeitung, offenes Lesen, automatisch als KI-Kontext eingebunden.
+
+Bewusst **nicht** Teil dieser Version (geplant als nächste grössere Ausbaustufe, auf derselben Netlify/Blobs-Basis, ohne zusätzlichen Fremddienst):
+- Task-Management pro Team mit Phasen/Roadmap-Fortschrittsanzeige
+- Entscheidungs-Journal (FAKT/ANNAHME/EMPFEHLUNG/OFFENE FRAGE)
+- Projektleitung-Übersichts-Dashboard mit Organigramm
+- Namen-/rollenbasierte Rechte (Lead/Stv./Mitglied) anstelle eines gemeinsamen Passworts
+
+Diese Priorisierung war eine bewusste Entscheidung: schneller ein echtes, getestetes Werkzeug live haben statt eines grösseren, länger dauernden Umbaus.
 
 ## Grenzen der KI-Integration (bewusste Design-Entscheidungen)
 
