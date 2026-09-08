@@ -1894,9 +1894,19 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 
 .roadmap-phase-name { font-size: 12px; font-weight: 700; color: var(--tb-ink); text-align: center; }
 .roadmap-phase-progress { font-size: 10.5px; color: var(--tb-muted); }
+.roadmap-phase-period { font-size: 10px; color: var(--tb-muted); }
 
 .roadmap-phase-tasks { margin-top: 8px; }
 .roadmap-phase-tasks-title { font-size: 12.5px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+
+.roadmap-phase-detail {
+  background: var(--white);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.roadmap-phase-period-inline { font-size: 12px; font-weight: 500; color: var(--tb-muted); }
+.roadmap-phase-summary { font-size: 13px; color: var(--tb-ink); margin: 6px 0 0; white-space: pre-wrap; }
 
 /* ============================================================
    DOKUMENTE TAB
