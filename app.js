@@ -3127,6 +3127,7 @@
     populateDecisionTeamSelects();
     populateCategoryFilterOptions(el.sharedFileCategoryFilter);
     populateCategoryFilterOptions(el.teamDocsCategoryFilter);
+    switchTopNav("board");
     try {
       const saved = sessionStorage.getItem(IDENTITY_SESSION_KEY);
       if (saved) {
