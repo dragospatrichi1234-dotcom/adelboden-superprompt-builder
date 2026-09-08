@@ -1751,6 +1751,21 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 
 .project-dashboard { display: flex; flex-direction: column; gap: 20px; }
 
+.my-tasks-team-label { font-size: 12px; font-weight: 500; color: var(--tb-muted, var(--grey-600)); }
+.my-tasks-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 10px;
+}
+.my-tasks-group h5 { font-size: 11px; font-weight: 700; text-transform: none; color: var(--tb-muted, var(--grey-600)); margin-bottom: 8px; }
+.my-tasks-group .task-card-list { display: flex; flex-direction: column; gap: 8px; }
+.my-tasks-empty { font-size: 11.5px; }
+
+@media (max-width: 700px) {
+  .my-tasks-groups { grid-template-columns: 1fr; }
+}
+
 .dashboard-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -1851,6 +1866,7 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 }
 .task-status-pill.status-todo { background: var(--grey-100); color: var(--grey-700-solid); }
 .task-status-pill.status-in_progress { background: #fdf5e8; color: #c98a1e; }
+.task-status-pill.status-review { background: #eef0fb; color: #4b4fc4; }
 .task-status-pill.status-done { background: #e7f3ec; color: #2c6e49; }
 .task-status-pill.status-blocked { background: var(--red-tint); color: var(--red-dark); }
 
@@ -2084,33 +2100,10 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 .docs-toolbar select { width: auto; min-width: 150px; }
 
 /* ============================================================
-   MIRO-EMBED
+   MIRO-LINK
    ============================================================ */
 
-.miro-frame-wrap { position: relative; }
-.miro-frame {
-  width: 100%;
-  height: 78vh;
-  min-height: 640px;
-  border: 1px solid var(--tb-line);
-  border-radius: 10px;
-  display: block;
-}
-.miro-frame-actions {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: flex;
-  gap: 8px;
-}
-.miro-frame-actions .btn {
-  background: var(--white);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-}
-
-@media (max-width: 700px) {
-  .miro-frame { height: 60vh; min-height: 420px; }
-}
+#miroLinkWrap { display: flex; align-items: center; gap: 10px; }
 
 /* ============================================================
    PROJEKTLEITUNG HUB
