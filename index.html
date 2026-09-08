@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=12">
+<link rel="stylesheet" href="./style.css?v=13">
 </head>
 <body>
 
@@ -451,10 +451,33 @@
           </div>
 
           <div id="teamRoadmapArea" class="team-tab-panel hidden">
-            <p id="roadmapFirstHint" class="hint roadmap-first-hint hidden">Jede Phase zeigt euren Fortschritt — Klick auf eine Phase filtert die Aufgaben.</p>
+            <div class="task-section-header">
+              <p id="roadmapFirstHint" class="hint roadmap-first-hint hidden">Jede Phase zeigt euren Fortschritt — Klick auf eine Phase filtert die Aufgaben.</p>
+              <button type="button" id="addPhaseBtn" class="btn btn-secondary btn-small" disabled title="Zuerst anmelden">+ Phase</button>
+            </div>
             <div id="roadmapEmptyHint" class="hint hidden">Für dieses Team sind noch keine Phasen angelegt.</div>
             <button type="button" id="seedPhasesBtn" class="btn btn-secondary btn-small hidden" disabled>Standard-Phasen anlegen</button>
             <div id="roadmapTimeline" class="roadmap-timeline"></div>
+
+            <div id="phaseForm" class="inline-form hidden">
+              <div class="field">
+                <label for="phaseNameInput">Name</label>
+                <input id="phaseNameInput" type="text" placeholder="z.B. Testing">
+              </div>
+              <div class="field">
+                <label for="phasePeriodInput">Zeitraum</label>
+                <input id="phasePeriodInput" type="text" placeholder="z.B. Nov. 2026">
+              </div>
+              <div class="field">
+                <label for="phaseSummaryInput">Wichtigste Ergebnisse</label>
+                <textarea id="phaseSummaryInput" rows="2" placeholder="Optional…"></textarea>
+              </div>
+              <div class="inline-form-actions">
+                <button type="button" id="phaseSaveBtn" class="btn btn-primary">Speichern</button>
+                <button type="button" id="phaseCancelBtn" class="btn btn-ghost">Abbrechen</button>
+              </div>
+            </div>
+
             <div id="roadmapPhaseTasks" class="roadmap-phase-tasks"></div>
           </div>
 
@@ -627,6 +650,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=8"></script>
-<script src="./app.js?v=14"></script>
+<script src="./app.js?v=15"></script>
 </body>
 </html>
