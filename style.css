@@ -2043,21 +2043,26 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 .miro-frame-wrap { position: relative; }
 .miro-frame {
   width: 100%;
-  height: 560px;
+  height: 78vh;
+  min-height: 640px;
   border: 1px solid var(--tb-line);
   border-radius: 10px;
   display: block;
 }
-.miro-edit-btn {
+.miro-frame-actions {
   position: absolute;
   top: 10px;
   right: 10px;
+  display: flex;
+  gap: 8px;
+}
+.miro-frame-actions .btn {
   background: var(--white);
   box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
 @media (max-width: 700px) {
-  .miro-frame { height: 380px; }
+  .miro-frame { height: 60vh; min-height: 420px; }
 }
 
 /* ============================================================
