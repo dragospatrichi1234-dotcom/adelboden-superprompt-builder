@@ -530,6 +530,12 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   gap: 6px;
 }
 
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
 .btn-primary {
   background: var(--navy);
   color: var(--white);
