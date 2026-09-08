@@ -235,7 +235,11 @@
       "decisionTypeFilter", "decisionTeamFilter", "addDecisionBtn",
       "decisionForm", "decisionTeamSelect", "decisionTypeSelect", "decisionTextInput",
       "decisionSaveBtn", "decisionCancelBtn", "decisionList", "decisionEmptyHint",
-      "orgChartCards"
+      "orgChartCards",
+      "leitungImport", "bulkTaskTitleInput", "bulkTaskDescInput", "bulkTaskDeadlineInput", "bulkTaskPriorityInput",
+      "bulkTaskTeamChips", "bulkTaskCreateBtn", "bulkTaskResultHint",
+      "bulkImportTextarea", "bulkImportPreviewBtn", "bulkImportPreviewWrap", "bulkImportTable",
+      "bulkImportStartBtn", "bulkImportResultHint"
     ].forEach(id => { el[id] = document.getElementById(id); });
   }
 
@@ -1429,6 +1433,7 @@
       renderMasterRoadmap();
       renderDecisionJournal();
       renderOrgChart();
+      renderBulkImportTab();
     } else {
       renderTaskArea();
       renderRoadmap();
@@ -1812,6 +1817,8 @@
     el.leitungRoadmap.classList.toggle("hidden", tabName !== "roadmap");
     el.leitungDecisions.classList.toggle("hidden", tabName !== "decisions");
     el.leitungOrg.classList.toggle("hidden", tabName !== "org");
+    el.leitungImport.classList.toggle("hidden", tabName !== "import");
+    if (tabName === "import") renderBulkImportTab();
   }
 
   /* ---------------------------------------------------------
@@ -2012,6 +2019,203 @@
       `;
       el.orgChartCards.appendChild(card);
     });
+  }
+
+  /* ---------------------------------------------------------
+     BULK-IMPORT (Projektleitung): mehrere Teams auf einmal
+     --------------------------------------------------------- */
+
+  let bulkTaskPendingTeams = [];
+
+  function renderBulkImportTab() {
+    const canUse = !!currentIdentity && currentIdentity.isLeitung;
+    el.bulkTaskCreateBtn.disabled = !canUse;
+    el.bulkTaskCreateBtn.title = canUse ? "" : "Nur Projektleitung kann hier Aufgaben anlegen";
+    if (!el.bulkTaskTeamChips.children.length) {
+      renderRosterTeamChipPicker(el.bulkTaskTeamChips, bulkTaskPendingTeams);
+    }
+  }
+
+  function resolveTeamIdFromText(text) {
+    const val = String(text || "").trim().toLowerCase();
+    if (!val) return null;
+    const team = TEAM_ROSTER.find(t => t.id.toLowerCase() === val || t.name.toLowerCase() === val);
+    return team ? team.id : null;
+  }
+
+  async function createBulkTasks() {
+    if (!currentIdentity || !currentIdentity.isLeitung) return;
+    const title = el.bulkTaskTitleInput.value.trim();
+    if (!title) { showToast("Bitte einen Titel eingeben."); return; }
+    if (!bulkTaskPendingTeams.length) { showToast("Bitte mindestens ein Team auswählen."); return; }
+
+    const payloadBase = {
+      title,
+      description: el.bulkTaskDescInput.value.trim(),
+      deadline: el.bulkTaskDeadlineInput.value || "",
+      priority: el.bulkTaskPriorityInput.value,
+      affectedTeams: []
+    };
+
+    let successCount = 0;
+    const failedTeams = [];
+    for (const teamId of bulkTaskPendingTeams) {
+      const { data } = await postBoard({ resource: "tasks", op: "create", actor: currentIdentity, data: { ...payloadBase, teamId } });
+      if (data && data.ok) {
+        boardTasks.push(data.item);
+        successCount++;
+      } else {
+        const team = getRosterTeamById(teamId);
+        failedTeams.push(team ? team.name : teamId);
+      }
+    }
+
+    renderTaskArea();
+    renderRoadmap();
+    if (typeof renderLeitungOverview === "function") renderLeitungOverview();
+
+    el.bulkTaskResultHint.classList.remove("hidden");
+    el.bulkTaskResultHint.textContent = failedTeams.length
+      ? `${successCount} Aufgabe(n) angelegt. Fehlgeschlagen: ${failedTeams.join(", ")}.`
+      : `${successCount} Aufgabe(n) erfolgreich angelegt.`;
+
+    if (successCount) {
+      el.bulkTaskTitleInput.value = "";
+      el.bulkTaskDescInput.value = "";
+      el.bulkTaskDeadlineInput.value = "";
+      bulkTaskPendingTeams = [];
+      renderRosterTeamChipPicker(el.bulkTaskTeamChips, bulkTaskPendingTeams);
+    }
+  }
+
+  const BULK_IMPORT_COLUMNS = ["team", "title", "description", "deadline", "priority"];
+
+  function parseBulkImportText(text) {
+    const lines = text.split("\n").map(l => l.replace(/\r$/, "")).filter(l => l.trim().length);
+    return lines.map(line => {
+      const cells = line.includes("\t") ? line.split("\t") : line.split(",");
+      const row = {
+        teamRaw: (cells[0] || "").trim(),
+        title: (cells[1] || "").trim(),
+        description: (cells[2] || "").trim(),
+        deadline: (cells[3] || "").trim(),
+        priorityRaw: (cells[4] || "").trim()
+      };
+      return row;
+    });
+  }
+
+  function validateBulkRow(row) {
+    const errors = [];
+    const teamId = resolveTeamIdFromText(row.teamRaw);
+    if (!teamId) errors.push("Team unbekannt");
+    if (!row.title) errors.push("Titel fehlt");
+    if (row.deadline && !/^\d{4}-\d{2}-\d{2}$/.test(row.deadline)) errors.push("Deadline-Format (JJJJ-MM-TT)");
+    const priority = ["low", "medium", "high"].includes(row.priorityRaw.toLowerCase()) ? row.priorityRaw.toLowerCase() : "medium";
+    return { teamId, priority, errors };
+  }
+
+  function renderBulkImportPreview(rows) {
+    el.bulkImportTable.innerHTML = "";
+    const thead = document.createElement("thead");
+    thead.innerHTML = `<tr><th></th><th>Team</th><th>Titel</th><th>Beschreibung</th><th>Deadline</th><th>Priorität</th><th>Status</th></tr>`;
+    el.bulkImportTable.appendChild(thead);
+    const tbody = document.createElement("tbody");
+
+    rows.forEach((row, idx) => {
+      const { teamId, priority, errors } = validateBulkRow(row);
+      const tr = document.createElement("tr");
+      tr.dataset.rowIndex = String(idx);
+      if (errors.length) tr.classList.add("bulk-row-error");
+
+      const checkTd = document.createElement("td");
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.checked = errors.length === 0;
+      check.className = "bulk-row-check";
+      checkTd.appendChild(check);
+      tr.appendChild(checkTd);
+
+      const makeCell = (value, field) => {
+        const td = document.createElement("td");
+        const input = document.createElement("input");
+        input.type = field === "deadline" ? "date" : "text";
+        input.value = value;
+        input.className = `bulk-cell-${field}`;
+        input.addEventListener("input", () => {
+          rows[idx][field === "team" ? "teamRaw" : field === "priority" ? "priorityRaw" : field] = input.value;
+          renderBulkImportPreview(rows);
+        });
+        td.appendChild(input);
+        return td;
+      };
+
+      tr.appendChild(makeCell(row.teamRaw, "team"));
+      tr.appendChild(makeCell(row.title, "title"));
+      tr.appendChild(makeCell(row.description, "description"));
+      tr.appendChild(makeCell(row.deadline, "deadline"));
+      tr.appendChild(makeCell(row.priorityRaw || priority, "priority"));
+
+      const statusTd = document.createElement("td");
+      statusTd.className = "bulk-row-status";
+      statusTd.textContent = errors.length ? errors.join(", ") : "OK";
+      tr.appendChild(statusTd);
+
+      tbody.appendChild(tr);
+    });
+
+    el.bulkImportTable.appendChild(tbody);
+    el.bulkImportPreviewWrap.classList.remove("hidden");
+    el.bulkImportResultHint.classList.add("hidden");
+    el.bulkImportTable.__rows = rows;
+  }
+
+  async function startBulkImport() {
+    if (!currentIdentity || !currentIdentity.isLeitung) return;
+    const rows = el.bulkImportTable.__rows || [];
+    const trs = Array.from(el.bulkImportTable.querySelectorAll("tbody tr"));
+
+    let successCount = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const tr of trs) {
+      const idx = Number(tr.dataset.rowIndex);
+      const row = rows[idx];
+      const checked = tr.querySelector(".bulk-row-check").checked;
+      if (!checked) { skipped++; continue; }
+      const { teamId, priority, errors: rowErrors } = validateBulkRow(row);
+      if (rowErrors.length) { skipped++; continue; }
+
+      const payload = {
+        teamId,
+        title: row.title,
+        description: row.description,
+        deadline: row.deadline,
+        priority,
+        affectedTeams: []
+      };
+      const { data } = await postBoard({ resource: "tasks", op: "create", actor: currentIdentity, data: payload });
+      if (data && data.ok) {
+        boardTasks.push(data.item);
+        successCount++;
+      } else {
+        errors.push(row.title);
+      }
+    }
+
+    renderTaskArea();
+    renderRoadmap();
+    if (typeof renderLeitungOverview === "function") renderLeitungOverview();
+
+    el.bulkImportResultHint.classList.remove("hidden");
+    el.bulkImportResultHint.textContent = `${successCount} Aufgabe(n) importiert, ${skipped} übersprungen (Fehler/abgewählt)` +
+      (errors.length ? `. Fehlgeschlagen: ${errors.join(", ")}.` : ".");
+
+    if (successCount) {
+      el.bulkImportTextarea.value = "";
+      el.bulkImportPreviewWrap.classList.add("hidden");
+    }
   }
 
   function canEditTask(task) {
@@ -2722,6 +2926,15 @@
       el.decisionForm.classList.add("hidden");
       resetDecisionForm();
     });
+
+    // --- Projektleitung-Hub: Bulk-Import ---
+    el.bulkTaskCreateBtn.addEventListener("click", createBulkTasks);
+    el.bulkImportPreviewBtn.addEventListener("click", () => {
+      const rows = parseBulkImportText(el.bulkImportTextarea.value);
+      if (!rows.length) { showToast("Bitte zuerst Zeilen einfügen."); return; }
+      renderBulkImportPreview(rows);
+    });
+    el.bulkImportStartBtn.addEventListener("click", startBulkImport);
   }
 
   /* ---------------------------------------------------------
