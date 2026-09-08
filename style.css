@@ -2032,6 +2032,22 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   margin-left: 4px;
 }
 
+.import-divider { border: none; border-top: 1px solid var(--tb-line); margin: 22px 0; }
+
+.table-scroll-wrap { overflow-x: auto; margin: 12px 0; }
+.bulk-import-table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 12.5px; }
+.bulk-import-table th {
+  text-align: left; font-size: 11px; color: var(--tb-muted); font-weight: 700;
+  padding: 6px 8px; border-bottom: 2px solid var(--tb-line);
+}
+.bulk-import-table td { padding: 4px 6px; border-bottom: 1px solid var(--tb-line); vertical-align: middle; }
+.bulk-import-table input[type="text"], .bulk-import-table input[type="date"] {
+  width: 100%; border: 1px solid var(--tb-line); border-radius: 6px; padding: 4px 6px; font-size: 12.5px;
+}
+.bulk-import-table tr.bulk-row-error td { background: #fdf0f0; }
+.bulk-row-status { font-size: 11px; color: var(--tb-status-overdue); white-space: nowrap; }
+.bulk-import-table tr:not(.bulk-row-error) .bulk-row-status { color: var(--tb-status-ok); }
+
 @media (max-width: 700px) {
   .team-overview-cards, .org-chart-cards { grid-template-columns: 1fr; }
   .decision-toolbar { flex-direction: column; align-items: stretch; }
