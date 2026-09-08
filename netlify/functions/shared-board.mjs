@@ -107,7 +107,7 @@ async function listAll(storeName) {
   return items.filter(Boolean);
 }
 
-const TASK_STATUSES = ["todo", "in_progress", "done", "blocked"];
+const TASK_STATUSES = ["todo", "in_progress", "review", "done", "blocked"];
 const TASK_PRIORITIES = ["low", "medium", "high"];
 
 export default async (request) => {
