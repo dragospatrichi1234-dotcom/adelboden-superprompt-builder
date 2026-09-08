@@ -18,7 +18,7 @@ const TEAM_ROSTER = [
     id: "leitung", name: "Projektleitung / Gesamtleitung", isLeitung: true,
     color: "#1E2761",
     lead: ["Luana H.", "Alfredo"], stv: ["Lena", "Daniel"],
-    members: ["Luana H.", "Alfredo", "Lena", "Daniel"]
+    members: ["Luana H.", "Alfredo", "Lena", "Daniel", "Sandro"]
   },
   {
     id: "food", name: "Food Production",
