@@ -56,6 +56,18 @@ body {
 h1, h2, h3, h4 { margin: 0; }
 p { margin: 0; }
 
+/* Keeps the H1→H2→H3 structure valid for screen readers without adding a
+   redundant visible heading where the nav tab already shows the page name. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---------------- Header ---------------- */
 
 .app-header {
@@ -325,6 +337,14 @@ textarea:focus, input:focus, select:focus {
   border-color: var(--navy-3);
   background: var(--white);
   box-shadow: 0 0 0 3px rgba(28, 74, 134, 0.12);
+}
+
+/* App-wide visible keyboard focus (buttons, links, chips, tabs) — the
+   board-layout has its own amber version further down; this covers
+   everything else so keyboard users always see where focus is. */
+:focus-visible {
+  outline: 2px solid var(--navy-3);
+  outline-offset: 2px;
 }
 
 select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appearance: none;
@@ -900,13 +920,17 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 
 .file-item-remove {
   flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--grey-500);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 6px;
   border-radius: 6px;
 }
 .file-item-remove:hover { background: var(--grey-200); color: var(--red-dark); }
@@ -1466,11 +1490,15 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 
 .file-star-btn {
   flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   font-size: 15px;
   cursor: pointer;
-  padding: 2px 4px;
   border-radius: 6px;
   line-height: 1;
 }
