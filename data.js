@@ -122,6 +122,13 @@ const OUTPUT_FORMATS = [
   "Budget", "KPI-Dashboard", "Präsentationsstruktur", "SOP", "Briefing"
 ];
 
+// Quick Mode shows only this subset by default (keeps the first, most
+// common choice visible without scrolling); the rest are behind
+// "Weitere Formate anzeigen". Advanced Mode always shows the full list.
+const QUICK_OUTPUT_FORMATS_PRIMARY = [
+  "Konzept", "Tabelle", "Checkliste", "Ablaufplan", "SOP", "Präsentationsstruktur"
+];
+
 const STYLE_OPTIONS = [
   "professionell & sachlich", "kurz & prägnant", "ausführlich & erklärend",
   "motivierend & teamorientiert", "formell (für Auftraggeber)", "operativ & direkt (fürs Team)"
