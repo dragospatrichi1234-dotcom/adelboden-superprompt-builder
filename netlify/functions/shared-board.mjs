@@ -217,6 +217,7 @@ export default async (request) => {
         mime: typeof d.mime === "string" ? d.mime : "application/octet-stream",
         size: approxBytes,
         teamIds: clampTeamIds(d.teamIds),
+        phaseId: typeof d.phaseId === "string" ? d.phaseId : "",
         description: String(d.description || "").slice(0, MAX_DESC_LEN),
         important: !!d.important,
         uploadedBy: auth.actor.name,
@@ -236,7 +237,8 @@ export default async (request) => {
       const updated = {
         ...existing,
         important: d.important !== undefined ? !!d.important : existing.important,
-        description: d.description !== undefined ? String(d.description).slice(0, MAX_DESC_LEN) : existing.description
+        description: d.description !== undefined ? String(d.description).slice(0, MAX_DESC_LEN) : existing.description,
+        phaseId: d.phaseId !== undefined ? String(d.phaseId) : existing.phaseId
       };
       await getStore("shared-files-meta").setJSON(id, updated);
       return jsonResponse(200, { ok: true, item: updated });
@@ -275,6 +277,7 @@ export default async (request) => {
       const item = {
         id: genId(),
         teamId: d.teamId,
+        phaseId: typeof d.phaseId === "string" ? d.phaseId : "",
         title: String(d.title).trim().slice(0, MAX_TITLE_LEN),
         description: String(d.description || "").slice(0, MAX_DESC_LEN),
         deadline: typeof d.deadline === "string" ? d.deadline.slice(0, 10) : "",
@@ -306,6 +309,7 @@ export default async (request) => {
         status: d.status !== undefined && TASK_STATUSES.includes(d.status) ? d.status : existing.status,
         priority: d.priority !== undefined && TASK_PRIORITIES.includes(d.priority) ? d.priority : existing.priority,
         affectedTeams: d.affectedTeams !== undefined ? clampTeamIds(d.affectedTeams) : existing.affectedTeams,
+        phaseId: d.phaseId !== undefined ? String(d.phaseId) : existing.phaseId,
         updatedAt: Date.now()
       };
       await store.setJSON(id, updated);
@@ -320,6 +324,117 @@ export default async (request) => {
       if (!canEditTeam(auth.actor, existing.teamId)) {
         return errorResponse(403, "wrong_team", "Du kannst nur Aufgaben deines eigenen Teams löschen.");
       }
+      await store.delete(id);
+      return jsonResponse(200, { ok: true });
+    }
+
+    return errorResponse(400, "invalid_request", "Unbekannte Operation.");
+  }
+
+  // ---- PHASES ----
+  if (resource === "phases") {
+    if (op === "list") {
+      const items = await listAll("phases");
+      items.sort((a, b) => (a.order || 0) - (b.order || 0));
+      return jsonResponse(200, { ok: true, items });
+    }
+
+    const auth = requireActor(payload);
+    if (!auth.ok) return auth.response;
+    const store = getStore("phases");
+
+    if (op === "seedDefaults") {
+      const teamId = payload.teamId;
+      if (!teamId) return errorResponse(400, "invalid_request", "Team fehlt.");
+      if (!canEditTeam(auth.actor, teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann Phasen anlegen.");
+      const existing = (await listAll("phases")).filter(p => p.teamId === teamId);
+      if (existing.length) return jsonResponse(200, { ok: true, items: existing });
+      const defaults = ["Analyse", "Konzept", "Planung", "Ausführung", "Abschluss"];
+      const created = [];
+      for (let i = 0; i < defaults.length; i++) {
+        const item = { id: genId(), teamId, name: defaults[i], order: i, status: i === 0 ? "active" : "open" };
+        await store.setJSON(item.id, item);
+        created.push(item);
+      }
+      return jsonResponse(200, { ok: true, items: created });
+    }
+
+    if (op === "create") {
+      const d = payload.data || {};
+      if (!d.teamId || !d.name) return errorResponse(400, "invalid_request", "Team oder Name fehlt.");
+      if (!canEditTeam(auth.actor, d.teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann Phasen anlegen.");
+      const existingCount = (await listAll("phases")).filter(p => p.teamId === d.teamId).length;
+      const item = { id: genId(), teamId: d.teamId, name: String(d.name).trim().slice(0, MAX_TITLE_LEN), order: existingCount, status: "open" };
+      await store.setJSON(item.id, item);
+      return jsonResponse(200, { ok: true, item });
+    }
+
+    if (op === "update") {
+      const { id, data } = payload;
+      if (!id) return errorResponse(400, "invalid_request", "ID fehlt.");
+      const existing = await store.get(id, { type: "json" });
+      if (!existing) return errorResponse(404, "not_found", "Phase nicht gefunden.");
+      if (!canEditTeam(auth.actor, existing.teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann Phasen bearbeiten.");
+      const d = data || {};
+      const updated = {
+        ...existing,
+        name: d.name !== undefined ? String(d.name).trim().slice(0, MAX_TITLE_LEN) : existing.name,
+        status: ["open", "active", "done"].includes(d.status) ? d.status : existing.status
+      };
+      await store.setJSON(id, updated);
+      return jsonResponse(200, { ok: true, item: updated });
+    }
+
+    if (op === "delete") {
+      const { id } = payload;
+      if (!id) return errorResponse(400, "invalid_request", "ID fehlt.");
+      const existing = await store.get(id, { type: "json" });
+      if (!existing) return jsonResponse(200, { ok: true });
+      if (!canEditTeam(auth.actor, existing.teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann Phasen löschen.");
+      await store.delete(id);
+      return jsonResponse(200, { ok: true });
+    }
+
+    return errorResponse(400, "invalid_request", "Unbekannte Operation.");
+  }
+
+  // ---- DECISIONS (Entscheidungs-Journal) ----
+  if (resource === "decisions") {
+    const DECISION_TYPES = ["FAKT", "ANNAHME", "EMPFEHLUNG", "OFFENE_FRAGE"];
+
+    if (op === "list") {
+      const items = await listAll("decisions");
+      items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      return jsonResponse(200, { ok: true, items });
+    }
+
+    const auth = requireActor(payload);
+    if (!auth.ok) return auth.response;
+    const store = getStore("decisions");
+
+    if (op === "create") {
+      const d = payload.data || {};
+      if (!d.teamId || !d.text || !String(d.text).trim()) return errorResponse(400, "invalid_request", "Team oder Text fehlt.");
+      if (!canEditTeam(auth.actor, d.teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann hier Einträge anlegen.");
+      const item = {
+        id: genId(),
+        teamId: d.teamId,
+        type: DECISION_TYPES.includes(d.type) ? d.type : "FAKT",
+        text: String(d.text).trim().slice(0, MAX_DESC_LEN),
+        relatedTaskId: typeof d.relatedTaskId === "string" ? d.relatedTaskId : "",
+        createdBy: auth.actor.name,
+        createdAt: Date.now()
+      };
+      await store.setJSON(item.id, item);
+      return jsonResponse(200, { ok: true, item });
+    }
+
+    if (op === "delete") {
+      const { id } = payload;
+      if (!id) return errorResponse(400, "invalid_request", "ID fehlt.");
+      const existing = await store.get(id, { type: "json" });
+      if (!existing) return jsonResponse(200, { ok: true });
+      if (!canEditTeam(auth.actor, existing.teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann diesen Eintrag löschen.");
       await store.delete(id);
       return jsonResponse(200, { ok: true });
     }
