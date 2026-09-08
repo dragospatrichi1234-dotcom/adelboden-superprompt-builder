@@ -63,6 +63,14 @@
   let selectedSharedFile = null;
   let selectedSidebarTeamId = null;
 
+  // Supabase (Phase 1, read-only, additive): central "teams" table.
+  // Deliberately NOT wired into the existing deadline UI yet — that UI's
+  // create/update/delete still runs entirely on Netlify Blobs, and mixing
+  // read sources for the same list would desync (a saved deadline would
+  // not show up). Kept separate until a real write path exists.
+  let sbTeams = [];
+  let sbTeamsLoaded = false;
+
   // Team-Board Etapa 2: team phases (Roadmap), decisions (Entscheidungs-
   // Journal) and the tab/hub navigation state — same "always fetch fresh"
   // pattern as deadlines/files/tasks above.
@@ -202,6 +210,7 @@
       "aiAnswerWrap", "aiAnswer", "aiCopyBtn", "aiExportMdBtn", "aiRegenerateBtn", "aiClearBtn",
       "aiEmptyHint",
       "navBuilderBtn", "navBoardBtn", "builderPage", "boardPage", "goToBoardFilesBtn",
+      "supabaseStatusBadge",
       "identityPicker", "identityStatus", "identityNameSelect", "identityTeamDisambigSelect",
       "teamSidebar", "teamMainTitle", "teamMainLead", "teamMainEmpty", "teamTaskArea",
       "addTaskBtn", "taskListWeek", "taskListLater", "taskListBlocked",
@@ -1078,6 +1087,9 @@
     if (isBoard && !boardDeadlinesLoaded) {
       loadBoardData();
     }
+    if (isBoard && !sbTeamsLoaded) {
+      loadSupabaseTeams();
+    }
   }
 
   // Never throws — network failures and non-JSON responses (e.g. the
@@ -1113,6 +1125,30 @@
     const { data } = await postBoard({ resource: "files", op: "list" });
     if (data && data.ok) boardFiles = data.items || [];
     return boardFiles;
+  }
+
+  // Supabase Phase 1: read-only "teams" load. Independent of loadBoardData()
+  // on purpose — does not gate, block, or feed the existing (Blobs-backed)
+  // deadline/task/file rendering. Only surfaces a small status badge so the
+  // connection is visibly verifiable without touching working functionality.
+  async function loadSupabaseTeams() {
+    if (!window.sbClient) {
+      el.supabaseStatusBadge.textContent = "🗄️ Supabase: Client nicht verfügbar.";
+      el.supabaseStatusBadge.classList.remove("hidden");
+      return;
+    }
+    try {
+      const { data, error } = await window.sbClient.from("teams").select("*").order("name");
+      if (error) throw error;
+      sbTeams = data || [];
+      sbTeamsLoaded = true;
+      el.supabaseStatusBadge.textContent = `🗄️ Supabase verbunden — ${sbTeams.length} Teams geladen.`;
+      el.supabaseStatusBadge.classList.remove("hidden");
+    } catch (e) {
+      console.error("Fehler beim Laden der Teams aus Supabase:", e);
+      el.supabaseStatusBadge.textContent = "🗄️ Supabase: Teams konnten nicht geladen werden.";
+      el.supabaseStatusBadge.classList.remove("hidden");
+    }
   }
 
   async function loadBoardData() {
