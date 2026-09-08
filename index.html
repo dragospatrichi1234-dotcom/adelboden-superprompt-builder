@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=16">
+<link rel="stylesheet" href="./style.css?v=17">
 </head>
 <body>
 
@@ -604,11 +604,30 @@
     <div class="card">
       <div class="board-section-header">
         <h3 class="card-title">🗓️ Deadlines</h3>
-        <select id="deadlineTeamFilter" class="board-filter-select"></select>
+        <div class="deadline-header-controls">
+          <div class="view-toggle" role="tablist">
+            <button type="button" id="deadlineViewListBtn" class="view-toggle-btn is-active" data-deadline-view="list">📋 Liste</button>
+            <button type="button" id="deadlineViewCalendarBtn" class="view-toggle-btn" data-deadline-view="calendar">📅 Kalender</button>
+          </div>
+          <select id="deadlineTeamFilter" class="board-filter-select"></select>
+        </div>
       </div>
 
-      <div id="deadlineList" class="deadline-list"></div>
-      <p id="deadlineEmptyHint" class="hint hidden">Noch keine Deadlines erfasst.</p>
+      <div id="deadlineListWrap">
+        <div id="deadlineList" class="deadline-list"></div>
+        <p id="deadlineEmptyHint" class="hint hidden">Noch keine Deadlines erfasst.</p>
+      </div>
+
+      <div id="deadlineCalendarWrap" class="hidden">
+        <div class="calendar-nav">
+          <button type="button" id="calendarPrevBtn" class="btn btn-small btn-ghost">◀</button>
+          <span id="calendarMonthLabel" class="calendar-month-label"></span>
+          <button type="button" id="calendarNextBtn" class="btn btn-small btn-ghost">▶</button>
+        </div>
+        <div id="calendarWeekdays" class="calendar-weekdays"></div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+        <div id="calendarDayDetail" class="calendar-day-detail hidden"></div>
+      </div>
 
       <button id="addDeadlineBtn" class="btn btn-secondary" type="button" disabled title="Bearbeitung zuerst entsperren">+ Deadline hinzufügen</button>
 
@@ -719,6 +738,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=9"></script>
-<script src="./app.js?v=20"></script>
+<script src="./app.js?v=21"></script>
 </body>
 </html>
