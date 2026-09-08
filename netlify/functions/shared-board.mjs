@@ -38,6 +38,18 @@ const TEAM_ROSTER = [
   { id: "finance", lead: ["Timon"], stv: ["Jenny"], members: ["Vivianne", "Jenny", "Timon"] }
 ];
 
+// Extra PIN gate for the leitung role only (broader admin powers than
+// regular teams — see the identity check below). Deliberately not applied
+// to every write call: this whole model is trust-based, not real auth (see
+// resolveActor's comment) — the PIN just stops someone casually picking a
+// leitung name from the dropdown, it is not a security boundary.
+const LEITUNG_PINS = {
+  "Luana H.": "7284",
+  "Alfredo": "5931",
+  "Lena": "4067",
+  "Daniel": "8352"
+};
+
 function jsonResponse(status, body) {
   return new Response(JSON.stringify(body), {
     status,
@@ -115,6 +127,12 @@ export default async (request) => {
   if (resource === "identity" && op === "check") {
     const actor = resolveActor(payload.actor);
     if (!actor) return errorResponse(401, "unknown_identity", "Name/Team-Kombination nicht erkannt.");
+    if (actor.isLeitung) {
+      const expectedPin = LEITUNG_PINS[actor.name];
+      const givenPin = typeof payload.actor.pin === "string" ? payload.actor.pin.trim() : "";
+      if (!givenPin) return errorResponse(401, "pin_required", "Für Projektleitung wird ein PIN benötigt.");
+      if (givenPin !== expectedPin) return errorResponse(401, "wrong_pin", "Falscher PIN.");
+    }
     return jsonResponse(200, { ok: true, actor });
   }
 
