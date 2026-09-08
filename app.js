@@ -231,7 +231,7 @@
       "sharedFileImportantCheckbox",
       "teamTabsWrap", "teamRoadmapArea", "teamDocsArea",
       "roadmapFirstHint", "roadmapEmptyHint", "seedPhasesBtn", "roadmapTimeline", "roadmapPhaseTasks",
-      "teamMiroArea", "miroEmptyState", "miroSetupWrap", "miroUrlInput", "miroSaveBtn", "miroSetupBtn", "miroFrameWrap", "miroFrame", "miroEditBtn",
+      "teamMiroArea", "miroEmptyState", "miroSetupWrap", "miroUrlInput", "miroSaveBtn", "miroSetupBtn", "miroFrameWrap", "miroFrame", "miroEditBtn", "miroOpenFullBtn",
       "addPhaseBtn", "phaseForm", "phaseNameInput", "phasePeriodInput", "phaseSummaryInput", "phaseSaveBtn", "phaseCancelBtn",
       "teamDocsSearch", "teamDocsPhaseFilter", "teamDocsList", "teamDocsEmptyHint", "goToUploadFromDocsBtn",
       "leitungHub", "leitungOverview", "leitungRoadmap", "leitungDecisions", "leitungOrg",
@@ -1960,6 +1960,17 @@
   let boardMiroLinks = {};
   let miroLinksLoaded = false;
 
+  // The embed link (…/app/live-embed/ID=/?…) isn't great for real editing —
+  // derive the normal board URL (…/app/board/ID=/) so people can pop out to
+  // the full, fast Miro app instead of working inside the iframe.
+  function deriveMiroBoardUrl(embedUrl) {
+    const withoutQuery = embedUrl.split("?")[0];
+    if (withoutQuery.includes("/app/live-embed/")) {
+      return withoutQuery.replace("/app/live-embed/", "/app/board/");
+    }
+    return embedUrl;
+  }
+
   async function fetchMiroLinksFresh() {
     const { data } = await postBoard({ resource: "miro", op: "list" });
     if (data && data.ok) {
@@ -1986,6 +1997,7 @@
       el.miroSetupBtn.classList.add("hidden");
       el.miroFrameWrap.classList.remove("hidden");
       if (el.miroFrame.src !== existing.url) el.miroFrame.src = existing.url;
+      el.miroOpenFullBtn.href = deriveMiroBoardUrl(existing.url);
       el.miroEditBtn.classList.toggle("hidden", !canEdit);
     } else {
       el.miroFrameWrap.classList.add("hidden");
