@@ -218,6 +218,7 @@ export default async (request) => {
         size: approxBytes,
         teamIds: clampTeamIds(d.teamIds),
         phaseId: typeof d.phaseId === "string" ? d.phaseId : "",
+        category: typeof d.category === "string" ? d.category.slice(0, 40) : "",
         description: String(d.description || "").slice(0, MAX_DESC_LEN),
         important: !!d.important,
         uploadedBy: auth.actor.name,
@@ -238,7 +239,8 @@ export default async (request) => {
         ...existing,
         important: d.important !== undefined ? !!d.important : existing.important,
         description: d.description !== undefined ? String(d.description).slice(0, MAX_DESC_LEN) : existing.description,
-        phaseId: d.phaseId !== undefined ? String(d.phaseId) : existing.phaseId
+        phaseId: d.phaseId !== undefined ? String(d.phaseId) : existing.phaseId,
+        category: d.category !== undefined ? String(d.category).slice(0, 40) : (existing.category || "")
       };
       await getStore("shared-files-meta").setJSON(id, updated);
       return jsonResponse(200, { ok: true, item: updated });
