@@ -474,5 +474,32 @@ export default async (request) => {
     return errorResponse(400, "invalid_request", "Unbekannte Operation.");
   }
 
+  // ---- MIRO (ein Embed-Link pro Team) ----
+  if (resource === "miro") {
+    if (op === "list") {
+      const items = await listAll("miro-boards");
+      return jsonResponse(200, { ok: true, items });
+    }
+
+    const auth = requireActor(payload);
+    if (!auth.ok) return auth.response;
+    const store = getStore("miro-boards");
+
+    if (op === "set") {
+      const d = payload.data || {};
+      if (!d.teamId || !d.url) return errorResponse(400, "invalid_request", "Team oder Link fehlt.");
+      if (!canEditTeam(auth.actor, d.teamId)) return errorResponse(403, "wrong_team", "Nur das zuständige Team kann den Miro-Link setzen.");
+      const url = String(d.url).trim();
+      if (!/^https:\/\/([a-z0-9-]+\.)?miro\.com\//i.test(url)) {
+        return errorResponse(400, "invalid_request", "Das sieht nicht nach einem Miro-Link aus.");
+      }
+      const item = { teamId: d.teamId, url: url.slice(0, 500), updatedBy: auth.actor.name, updatedAt: Date.now() };
+      await store.setJSON(d.teamId, item);
+      return jsonResponse(200, { ok: true, item });
+    }
+
+    return errorResponse(400, "invalid_request", "Unbekannte Operation.");
+  }
+
   return errorResponse(400, "invalid_request", "Unbekannte Ressource.");
 };
