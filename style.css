@@ -1162,7 +1162,7 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 }
 
 .board-layout {
-  max-width: 1000px;
+  max-width: 1200px;
   width: 100%;
   margin: 0 auto;
   padding: 8px 32px 60px;
@@ -1513,5 +1513,229 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 @media (max-width: 560px) {
   .step-tab-label { display: none; }
   .step-tab { padding: 10px; }
+}
+
+/* ============================================================
+   TEAM-BOARD PHASE 2 — Identity picker, team sidebar, tasks
+   ============================================================ */
+
+.identity-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.identity-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--grey-600);
+  background: var(--grey-100);
+  padding: 5px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.identity-picker.is-identified .identity-status {
+  background: var(--ice);
+  color: var(--navy-2);
+}
+
+.identity-picker select {
+  width: auto;
+  min-width: 160px;
+  font-size: 13px;
+  padding: 8px 30px 8px 12px;
+}
+
+/* ---------------- Team workspace: sidebar + main ---------------- */
+
+.team-workspace {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.team-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--navy);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+}
+
+.team-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ice-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.team-sidebar-item:hover { background: rgba(255,255,255,0.08); }
+
+.team-sidebar-item.is-active {
+  background: var(--ice);
+  color: var(--navy);
+}
+
+.team-sidebar-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.team-sidebar-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+  margin: 8px 4px;
+}
+
+.team-main {
+  background: var(--white);
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+}
+
+.team-main-header { margin-bottom: 16px; }
+.team-main-header h3 {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0 0 2px;
+}
+
+.task-main-empty {
+  padding: 24px 0;
+  text-align: center;
+}
+
+.task-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.task-section-header .card-title { margin-bottom: 0; }
+
+.task-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.task-column-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--grey-600);
+  margin: 0 0 8px;
+}
+
+.task-card-list { display: flex; flex-direction: column; gap: 8px; }
+
+.task-column-empty { font-size: 11.5px; margin-top: 4px; }
+.task-column-empty.hidden { display: none; }
+
+.task-card {
+  background: var(--white);
+  border: 1px solid var(--line, var(--grey-200));
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.task-card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.task-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+.task-status-pill.status-todo { background: var(--grey-100); color: var(--grey-700-solid); }
+.task-status-pill.status-in_progress { background: #fdf5e8; color: #c98a1e; }
+.task-status-pill.status-done { background: #e7f3ec; color: #2c6e49; }
+.task-status-pill.status-blocked { background: var(--red-tint); color: var(--red-dark); }
+
+.task-priority-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.task-priority-dot.priority-high { background: var(--red); }
+.task-priority-dot.priority-medium { background: #c98a1e; }
+.task-priority-dot.priority-low { background: var(--grey-300); }
+
+.task-card-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.task-card-title.is-done { text-decoration: line-through; color: var(--grey-500); }
+.task-card-deadline { font-size: 11px; color: var(--grey-600); margin-bottom: 6px; }
+.task-card-deadline.is-overdue { color: var(--red-dark); font-weight: 700; }
+.task-card-deadline.is-soon { color: #c98a1e; font-weight: 700; }
+
+.task-card-teams { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.task-team-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.task-card-actions { display: flex; gap: 8px; margin-top: 6px; }
+.task-card-actions button {
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--grey-500);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.task-card-actions button:hover { color: var(--red-dark); }
+
+@media (max-width: 900px) {
+  .team-workspace { grid-template-columns: 1fr; }
+  .team-sidebar { flex-direction: row; overflow-x: auto; }
+  .team-sidebar-divider { width: 1px; height: auto; margin: 0 4px; }
+  .task-columns { grid-template-columns: 1fr; }
+}
+
+/* "Betrifft euch auch" (Schnittstellen-Tasks anderer Teams) — kept as its
+   own visually separate block, not mixed into "Für euch". */
+.affecting-tasks-wrap { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--grey-200); }
+.affecting-tasks-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* Critical, time-pressured actions (status toggle, save) get a larger
+   56px minimum tap target — exceeds the general 44px baseline, per the
+   on-site/mobile/gloves usage scenario. */
+.task-status-pill {
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+#taskSaveBtn, #deadlineSaveBtn, #sharedFileUploadBtn {
+  min-height: 48px;
+  padding: 12px 22px;
 }
 

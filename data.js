@@ -5,6 +5,88 @@
    Aufgabenübersicht Sunrise VIP Cube, Team-Pitch Handout 251B
    ============================================================ */
 
+/* ------------------------------------------------------------
+   TEAM ROSTER (Team-Board Phase 2)
+   Aus dem offiziellen Organigramm, Stand 7.9.2026. "leitung" ist kein
+   Team wie die anderen sieben, sondern der Koordinations-/Admin-Hub.
+   Mirrored server-side in netlify/functions/shared-board.mjs — bei
+   Änderungen beide Stellen synchron halten.
+   ------------------------------------------------------------ */
+
+const TEAM_ROSTER = [
+  {
+    id: "leitung", name: "Projektleitung / Gesamtleitung", isLeitung: true,
+    color: "#1E2761",
+    lead: ["Luana H.", "Alfredo"], stv: ["Lena", "Daniel"],
+    members: ["Luana H.", "Alfredo", "Lena", "Daniel"]
+  },
+  {
+    id: "food", name: "Food Production",
+    color: "#C77B3E",
+    lead: ["Saskia", "Ann-Sophie"], stv: ["Jiyan", "Ramon"],
+    members: ["Dragos", "Gianluca", "Meret", "Jan", "Laura F.", "Jiyan", "Ramon", "Ann-Sophie", "Saskia"]
+  },
+  {
+    id: "hospitality", name: "Hospitality & Guest Experience",
+    color: "#4A7A8C",
+    lead: ["Ignacio"], stv: ["Céline"],
+    members: ["William", "Laura H.", "Jessica", "Anna", "Lea", "Lars", "Ronnie", "Jan", "Céline", "Ignacio"]
+  },
+  {
+    id: "club", name: "Club & Beverage (Sunrise Club)",
+    color: "#8B4A9C",
+    lead: ["Rouven", "Thore"], stv: ["Raffaela", "Janina"],
+    members: ["Nina", "Cyril", "Thore", "Janina", "Raffaela", "Rouven"]
+  },
+  {
+    id: "operations", name: "Operations & Logistics",
+    color: "#5C7A3E",
+    lead: ["Roger"], stv: ["Fabian"],
+    members: ["Julia", "Janis", "Lukas", "Lena", "Fabienne", "Fabian", "Roger"]
+  },
+  {
+    id: "marketing", name: "Kommunikation (Marketing, Sponsoring, HR)",
+    color: "#C94F6D",
+    lead: ["Luana F."], stv: ["Carolina"],
+    members: ["Mailin", "Johann", "Maria", "Carolina", "Luana F."]
+  },
+  {
+    id: "sustainability", name: "Sustainability & Quality",
+    color: "#3E8C6E",
+    lead: ["Daniel"], stv: ["Loredana"],
+    members: ["Sarmilan", "Daniel", "Loredana"]
+  },
+  {
+    id: "finance", name: "Finance & Controlling",
+    color: "#3E5C8C",
+    lead: ["Timon"], stv: ["Jenny"],
+    members: ["Vivianne", "Jenny", "Timon"]
+  }
+];
+
+function getRosterTeamById(id) {
+  return TEAM_ROSTER.find(t => t.id === id);
+}
+
+// Flattened, deduplicated name -> [teamIds] map, since a few people belong
+// to two teams (e.g. Daniel: leitung + sustainability). The identity picker
+// asks a disambiguation question only when a name maps to more than one team.
+function buildRosterNameIndex() {
+  const index = {};
+  TEAM_ROSTER.forEach(team => {
+    const all = new Set([...team.lead, ...team.stv, ...team.members]);
+    all.forEach(name => {
+      if (!index[name]) index[name] = [];
+      if (!index[name].includes(team.id)) index[name].push(team.id);
+    });
+  });
+  return index;
+}
+
+function isRosterLeadOrStv(team, name) {
+  return team.lead.includes(name) || team.stv.includes(name);
+}
+
 const PROJECT_META = {
   eventDates: "7.–10. Januar 2027 (Mittwoch bis Sonntag)",
   location: "Sunrise VIP Cube, FIS Ski World Cup Adelboden 2027",

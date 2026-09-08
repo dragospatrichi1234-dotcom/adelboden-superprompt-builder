@@ -52,16 +52,25 @@
 
   // Team-Board: shared, persistent (Netlify Blobs) data — always fetched
   // fresh from the server, never stored in the local `state`/localStorage.
-  const BOARD_PASSWORD_SESSION_KEY = "adelboden2027_board_password";
   let boardDeadlines = [];
   let boardFiles = [];
+  let boardTasks = [];
   let boardDeadlinesLoaded = false;
-  let boardUnlocked = false;
-  let boardEditPassword = "";
   let deadlineTeamFilterValue = "all";
   let pendingDeadlineTeamIds = [];
   let pendingSharedFileTeamIds = [];
+  let pendingTaskAffectedTeams = [];
   let selectedSharedFile = null;
+  let selectedSidebarTeamId = null;
+
+  // Identity ("Wer bist du?") replaces the old shared-password model —
+  // matches the project spec: no real login, just a claimed name/team
+  // checked against the roster, purely to guide correct behaviour.
+  const IDENTITY_SESSION_KEY = "adelboden2027_board_identity";
+  let currentIdentity = null; // { name, teamId, isLeitung } | null
+  let boardUnlocked = false;  // true once currentIdentity is set — kept as
+                               // a simple alias so existing gating checks
+                               // below read naturally.
 
   /* ---------------------------------------------------------
      PERSISTENCE
@@ -181,7 +190,11 @@
       "aiAnswerWrap", "aiAnswer", "aiCopyBtn", "aiExportMdBtn", "aiRegenerateBtn", "aiClearBtn",
       "aiEmptyHint",
       "navBuilderBtn", "navBoardBtn", "builderPage", "boardPage", "goToBoardFilesBtn",
-      "editLock", "editLockStatus", "unlockPasswordInput", "unlockEditBtn", "unlockConfirmBtn",
+      "identityPicker", "identityStatus", "identityNameSelect", "identityTeamDisambigSelect",
+      "teamSidebar", "teamMainTitle", "teamMainLead", "teamMainEmpty", "teamTaskArea",
+      "addTaskBtn", "taskListWeek", "taskListLater", "taskListBlocked",
+      "taskForm", "taskTitleInput", "taskDescInput", "taskDeadlineInput", "taskPriorityInput",
+      "taskAffectedTeamChips", "taskSaveBtn", "taskCancelBtn",
       "deadlineTeamFilter", "deadlineList", "deadlineEmptyHint", "addDeadlineBtn",
       "deadlineForm", "deadlineTitleInput", "deadlineDateInput", "deadlineTeamChips",
       "deadlineDescInput", "deadlineSaveBtn", "deadlineCancelBtn",
@@ -1046,15 +1059,23 @@
     }
   }
 
+  // Never throws — network failures and non-JSON responses (e.g. the
+  // function not being deployed yet) resolve to { data: null } instead,
+  // so every caller's existing "if (data && data.ok)" check already
+  // handles it via handleBoardWriteError's fallback branch.
   async function postBoard(body) {
-    const res = await fetch("/.netlify/functions/shared-board", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    let data;
-    try { data = await res.json(); } catch (e) { throw new Error("bad_response"); }
-    return { httpOk: res.ok, data };
+    try {
+      const res = await fetch("/.netlify/functions/shared-board", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      let data = null;
+      try { data = await res.json(); } catch (e) { /* non-JSON response */ }
+      return { httpOk: res.ok, data };
+    } catch (e) {
+      return { httpOk: false, data: null };
+    }
   }
 
   // Always fetches fresh from the server (deadlines can change at any time,
@@ -1168,7 +1189,7 @@
 
   async function toggleDeadlineStatus(d) {
     const newStatus = d.status === "erledigt" ? "offen" : "erledigt";
-    const { data } = await postBoard({ resource: "deadlines", op: "update", editPassword: boardEditPassword, id: d.id, data: { status: newStatus } });
+    const { data } = await postBoard({ resource: "deadlines", op: "update", actor: currentIdentity, id: d.id, data: { status: newStatus } });
     if (data && data.ok) {
       d.status = newStatus;
       renderDeadlines();
@@ -1179,7 +1200,7 @@
 
   async function deleteDeadline(id) {
     if (!confirm("Diese Deadline wirklich löschen?")) return;
-    const { data } = await postBoard({ resource: "deadlines", op: "delete", editPassword: boardEditPassword, id });
+    const { data } = await postBoard({ resource: "deadlines", op: "delete", actor: currentIdentity, id });
     if (data && data.ok) {
       boardDeadlines = boardDeadlines.filter(d => d.id !== id);
       renderDeadlines();
@@ -1260,7 +1281,7 @@
   }
 
   async function toggleFileImportant(f) {
-    const { data } = await postBoard({ resource: "files", op: "update", editPassword: boardEditPassword, id: f.id, data: { important: !f.important } });
+    const { data } = await postBoard({ resource: "files", op: "update", actor: currentIdentity, id: f.id, data: { important: !f.important } });
     if (data && data.ok) {
       f.important = data.item.important;
       renderSharedFiles();
@@ -1271,7 +1292,7 @@
 
   async function deleteSharedFile(id) {
     if (!confirm("Diese Datei wirklich löschen? Das kann nicht rückgängig gemacht werden.")) return;
-    const { data } = await postBoard({ resource: "files", op: "delete", editPassword: boardEditPassword, id });
+    const { data } = await postBoard({ resource: "files", op: "delete", actor: currentIdentity, id });
     if (data && data.ok) {
       boardFiles = boardFiles.filter(f => f.id !== id);
       renderSharedFiles();
@@ -1282,56 +1303,343 @@
   }
 
   function handleBoardWriteError(data) {
-    if (data && data.code === "not_configured") {
-      showToast("Bearbeitung ist noch nicht konfiguriert (Administrator muss BOARD_EDIT_PASSWORD setzen).");
-    } else if (data && data.code === "wrong_password") {
-      showToast("Falsches Passwort — Bearbeitung wird zurückgesetzt.");
-      lockBoard();
+    if (!data) {
+      showToast("Netzwerkfehler — bitte Verbindung prüfen und erneut versuchen.");
+    } else if (data.code === "unknown_identity") {
+      showToast("Nicht erkannt — bitte oben deinen Namen erneut auswählen.");
+      clearIdentity();
+    } else if (data.code === "wrong_team") {
+      showToast(data.message || "Das gehört nicht zu deinem Team.");
     } else {
-      showToast((data && data.message) || "Aktion fehlgeschlagen.");
+      showToast(data.message || "Aktion fehlgeschlagen.");
     }
   }
 
-  function lockBoard() {
+  function clearIdentity() {
+    currentIdentity = null;
     boardUnlocked = false;
-    boardEditPassword = "";
-    try { sessionStorage.removeItem(BOARD_PASSWORD_SESSION_KEY); } catch (e) { /* ignore */ }
-    el.editLock.classList.remove("is-unlocked");
-    el.editLockStatus.textContent = "🔒 Nur Lesen";
-    el.unlockEditBtn.classList.remove("hidden");
-    el.unlockConfirmBtn.classList.add("hidden");
-    el.unlockPasswordInput.classList.add("hidden");
-    el.unlockPasswordInput.value = "";
+    try { sessionStorage.removeItem(IDENTITY_SESSION_KEY); } catch (e) { /* ignore */ }
+    renderIdentityUi();
     el.addDeadlineBtn.disabled = true;
     el.showSharedFileFormBtn.disabled = true;
     renderDeadlines();
     renderSharedFiles();
+    renderTeamSidebar();
+    renderTaskArea();
   }
 
-  function unlockBoardUi() {
-    boardUnlocked = true;
-    el.editLock.classList.add("is-unlocked");
-    el.editLockStatus.textContent = "🔓 Bearbeitung aktiv";
-    el.unlockEditBtn.classList.add("hidden");
-    el.unlockConfirmBtn.classList.add("hidden");
-    el.unlockPasswordInput.classList.add("hidden");
-    el.addDeadlineBtn.disabled = false;
-    el.showSharedFileFormBtn.disabled = false;
-    renderDeadlines();
-    renderSharedFiles();
+  function renderIdentityUi() {
+    el.identityPicker.classList.toggle("is-identified", !!currentIdentity);
+    if (currentIdentity) {
+      const team = getRosterTeamById(currentIdentity.teamId);
+      el.identityStatus.textContent = `👤 ${currentIdentity.name} (${team ? team.name : currentIdentity.teamId})`;
+    } else {
+      el.identityStatus.textContent = "👤 Nicht angemeldet";
+    }
   }
 
-  async function tryUnlockBoard(password, { silent } = {}) {
-    const { data } = await postBoard({ resource: "auth", op: "check", editPassword: password });
+  async function finalizeIdentity(name, teamId, { silent } = {}) {
+    const { data } = await postBoard({ resource: "identity", op: "check", actor: { name, teamId } });
     if (data && data.ok) {
-      boardEditPassword = password;
-      try { sessionStorage.setItem(BOARD_PASSWORD_SESSION_KEY, password); } catch (e) { /* ignore */ }
-      unlockBoardUi();
-      if (!silent) showToast("Bearbeitung entsperrt.");
+      currentIdentity = data.actor;
+      boardUnlocked = true;
+      try { sessionStorage.setItem(IDENTITY_SESSION_KEY, JSON.stringify(currentIdentity)); } catch (e) { /* ignore */ }
+      renderIdentityUi();
+      el.addDeadlineBtn.disabled = false;
+      el.showSharedFileFormBtn.disabled = false;
+      renderDeadlines();
+      renderSharedFiles();
+      renderTeamSidebar();
+      renderTaskArea();
+      if (!silent) showToast(`Angemeldet als ${currentIdentity.name}.`);
       return true;
     }
     if (!silent) handleBoardWriteError(data);
     return false;
+  }
+
+  /* ---------------------------------------------------------
+     TEAM SIDEBAR + TASKS ("Nächste Schritte")
+     --------------------------------------------------------- */
+
+  const rosterNameIndex = buildRosterNameIndex();
+  let doubleRoleHintShown = false;
+
+  // Grouped by team (optgroup) + alphabetical within each group — per the
+  // user-journey review, a flat ~40-name list is tedious to scan.
+  function renderIdentityNameOptions() {
+    el.identityNameSelect.innerHTML = '<option value="">Wer bist du?</option>';
+    TEAM_ROSTER.forEach(team => {
+      const namesInTeam = [...new Set([...team.lead, ...team.stv, ...team.members])].sort((a, b) => a.localeCompare(b, "de"));
+      if (!namesInTeam.length) return;
+      const group = document.createElement("optgroup");
+      group.label = team.name;
+      namesInTeam.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        group.appendChild(opt);
+      });
+      el.identityNameSelect.appendChild(group);
+    });
+  }
+
+  function renderTeamSidebar() {
+    el.teamSidebar.innerHTML = "";
+
+    const leitungTeam = TEAM_ROSTER.find(t => t.isLeitung);
+    const otherTeams = TEAM_ROSTER.filter(t => !t.isLeitung);
+
+    function buildItem(team) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "team-sidebar-item" + (selectedSidebarTeamId === team.id ? " is-active" : "");
+      btn.innerHTML = `<span class="team-sidebar-dot" style="background:${team.color}"></span><span>${escapeHtml(team.name)}</span>`;
+      btn.addEventListener("click", () => selectSidebarTeam(team.id));
+      return btn;
+    }
+
+    if (leitungTeam) el.teamSidebar.appendChild(buildItem(leitungTeam));
+    const divider = document.createElement("div");
+    divider.className = "team-sidebar-divider";
+    el.teamSidebar.appendChild(divider);
+    otherTeams.forEach(t => el.teamSidebar.appendChild(buildItem(t)));
+  }
+
+  function selectSidebarTeam(teamId) {
+    selectedSidebarTeamId = teamId;
+    renderTeamSidebar();
+    const team = getRosterTeamById(teamId);
+    if (!team) return;
+    el.teamMainTitle.textContent = team.name;
+    el.teamMainLead.textContent = "Lead: " + [...team.lead, ...team.stv].join(", ");
+    el.teamMainEmpty.classList.add("hidden");
+    el.teamTaskArea.classList.remove("hidden");
+    if (!boardTasks.length) fetchTasksFresh().then(renderTaskArea);
+    else renderTaskArea();
+  }
+
+  async function fetchTasksFresh() {
+    const { data } = await postBoard({ resource: "tasks", op: "list" });
+    if (data && data.ok) boardTasks = data.items || [];
+    return boardTasks;
+  }
+
+  function canEditTask(task) {
+    if (!currentIdentity) return false;
+    return currentIdentity.isLeitung || currentIdentity.teamId === task.teamId;
+  }
+
+  function taskDeadlineUrgency(dateStr, status) {
+    if (status === "done") return "";
+    if (!dateStr) return "";
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return "";
+    const diffDays = Math.round((d - today) / 86400000);
+    if (diffDays < 0) return "is-overdue";
+    if (diffDays <= 3) return "is-soon";
+    return "";
+  }
+
+  function relativeDeadlineLabel(dateStr) {
+    if (!dateStr) return "kein Datum";
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return dateStr;
+    const diffDays = Math.round((d - today) / 86400000);
+    if (diffDays === 0) return "heute";
+    if (diffDays === 1) return "morgen";
+    if (diffDays > 1 && diffDays <= 14) return `in ${diffDays} Tagen`;
+    if (diffDays < 0) return `${Math.abs(diffDays)} Tage überfällig`;
+    return dateStr;
+  }
+
+  const TASK_STATUS_LABELS = { todo: "Offen", in_progress: "In Arbeit", done: "Erledigt", blocked: "Blockiert" };
+  const TASK_STATUS_ORDER = ["todo", "in_progress", "done", "blocked"];
+
+  function buildTaskCard(task, { showTeamBadge } = {}) {
+    const card = document.createElement("div");
+    card.className = "task-card";
+    const urgency = taskDeadlineUrgency(task.deadline, task.status);
+    const editable = canEditTask(task);
+    const team = getRosterTeamById(task.teamId);
+
+    const top = document.createElement("div");
+    top.className = "task-card-top";
+
+    const statusBtn = document.createElement("button");
+    statusBtn.type = "button";
+    statusBtn.className = `task-status-pill status-${task.status}`;
+    statusBtn.textContent = TASK_STATUS_LABELS[task.status] || task.status;
+    statusBtn.disabled = !editable;
+    statusBtn.title = editable ? "Status weiterschalten" : "Nur das zuständige Team kann den Status ändern";
+    statusBtn.addEventListener("click", () => cycleTaskStatus(task));
+    top.appendChild(statusBtn);
+
+    const prio = document.createElement("span");
+    prio.className = `task-priority-dot priority-${task.priority}`;
+    prio.title = "Priorität: " + task.priority;
+    top.appendChild(prio);
+
+    if (showTeamBadge && team) {
+      const badge = document.createElement("span");
+      badge.className = "task-team-badge";
+      badge.style.background = team.color + "26"; // ~15% opacity
+      badge.style.color = team.color;
+      badge.textContent = team.name;
+      top.appendChild(badge);
+    }
+
+    card.appendChild(top);
+
+    const title = document.createElement("div");
+    title.className = "task-card-title" + (task.status === "done" ? " is-done" : "");
+    title.textContent = task.title;
+    card.appendChild(title);
+
+    const deadline = document.createElement("div");
+    deadline.className = "task-card-deadline" + (urgency ? " " + urgency : "");
+    deadline.textContent = relativeDeadlineLabel(task.deadline);
+    card.appendChild(deadline);
+
+    const affectedNames = getTeamNamesFromRoster(task.affectedTeams || []);
+    if (affectedNames.length) {
+      const teamsWrap = document.createElement("div");
+      teamsWrap.className = "task-card-teams";
+      affectedNames.forEach(n => {
+        const b = document.createElement("span");
+        b.className = "task-team-badge";
+        b.style.background = "var(--ice)";
+        b.style.color = "var(--navy-2)";
+        b.textContent = n;
+        teamsWrap.appendChild(b);
+      });
+      card.appendChild(teamsWrap);
+    }
+
+    if (editable) {
+      const actions = document.createElement("div");
+      actions.className = "task-card-actions";
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.textContent = "✕ Löschen";
+      delBtn.addEventListener("click", () => deleteTask(task.id));
+      actions.appendChild(delBtn);
+      card.appendChild(actions);
+    }
+
+    return card;
+  }
+
+  function getTeamNamesFromRoster(ids) {
+    return ids.map(id => { const t = getRosterTeamById(id); return t ? t.name : id; });
+  }
+
+  async function cycleTaskStatus(task) {
+    const idx = TASK_STATUS_ORDER.indexOf(task.status);
+    const next = TASK_STATUS_ORDER[(idx + 1) % TASK_STATUS_ORDER.length];
+    const { data } = await postBoard({ resource: "tasks", op: "update", actor: currentIdentity, id: task.id, data: { status: next } });
+    if (data && data.ok) {
+      task.status = data.item.status;
+      renderTaskArea();
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  async function deleteTask(id) {
+    if (!confirm("Diese Aufgabe wirklich löschen?")) return;
+    const { data } = await postBoard({ resource: "tasks", op: "delete", actor: currentIdentity, id });
+    if (data && data.ok) {
+      boardTasks = boardTasks.filter(t => t.id !== id);
+      renderTaskArea();
+      showToast("Aufgabe gelöscht.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  // "Für euch" (owned by the selected team) vs "Betrifft euch auch"
+  // (selected team is only listed as an affected/interface team) — kept
+  // as two visually separate groups per the user-journey review, rather
+  // than mixing both into one badge-heavy list.
+  function renderTaskArea() {
+    if (!selectedSidebarTeamId) return;
+    const ownTasks = boardTasks.filter(t => t.teamId === selectedSidebarTeamId);
+    const affectingTasks = boardTasks.filter(t => t.teamId !== selectedSidebarTeamId && (t.affectedTeams || []).includes(selectedSidebarTeamId));
+
+    const week = [], later = [], blocked = [];
+    ownTasks.forEach(t => {
+      if (t.status === "blocked") { blocked.push(t); return; }
+      const urgency = taskDeadlineUrgency(t.deadline, t.status);
+      if (!t.deadline || urgency === "is-overdue" || urgency === "is-soon" || t.status === "in_progress") week.push(t);
+      else later.push(t);
+    });
+
+    const fillColumn = (containerEl, tasks) => {
+      containerEl.innerHTML = "";
+      tasks.forEach(t => containerEl.appendChild(buildTaskCard(t, { showTeamBadge: false })));
+      const emptyHint = document.querySelector(`[data-empty-for="${containerEl.id}"]`);
+      if (emptyHint) emptyHint.classList.toggle("hidden", tasks.length > 0);
+    };
+    fillColumn(el.taskListWeek, week);
+    fillColumn(el.taskListLater, later);
+    fillColumn(el.taskListBlocked, blocked);
+
+    // "Betrifft euch auch" — rendered inline after the three columns.
+    let affectingWrap = document.getElementById("affectingTasksWrap");
+    if (!affectingWrap) {
+      affectingWrap = document.createElement("div");
+      affectingWrap.id = "affectingTasksWrap";
+      affectingWrap.className = "affecting-tasks-wrap";
+      el.teamTaskArea.appendChild(affectingWrap);
+    }
+    if (affectingTasks.length) {
+      affectingWrap.innerHTML = '<h5 class="task-column-title">Betrifft euch auch (Schnittstellen)</h5>';
+      const list = document.createElement("div");
+      list.className = "task-card-list affecting-tasks-list";
+      affectingTasks.forEach(t => list.appendChild(buildTaskCard(t, { showTeamBadge: true })));
+      affectingWrap.appendChild(list);
+    } else {
+      affectingWrap.innerHTML = "";
+    }
+
+    el.addTaskBtn.disabled = !currentIdentity || !(currentIdentity.isLeitung || currentIdentity.teamId === selectedSidebarTeamId);
+    el.addTaskBtn.title = el.addTaskBtn.disabled ? "Nur das zuständige Team kann Aufgaben anlegen" : "";
+  }
+
+  function resetTaskForm() {
+    el.taskTitleInput.value = "";
+    el.taskDescInput.value = "";
+    el.taskDeadlineInput.value = "";
+    el.taskPriorityInput.value = "medium";
+    pendingTaskAffectedTeams = [];
+    renderRosterTeamChipPicker(el.taskAffectedTeamChips, pendingTaskAffectedTeams, selectedSidebarTeamId);
+  }
+
+  async function saveTask() {
+    const title = el.taskTitleInput.value.trim();
+    if (!title) { showToast("Bitte einen Titel eingeben."); return; }
+    if (!selectedSidebarTeamId) return;
+    const payload = {
+      teamId: selectedSidebarTeamId,
+      title,
+      description: el.taskDescInput.value.trim(),
+      deadline: el.taskDeadlineInput.value || "",
+      priority: el.taskPriorityInput.value,
+      affectedTeams: [...pendingTaskAffectedTeams]
+    };
+    const { data } = await postBoard({ resource: "tasks", op: "create", actor: currentIdentity, data: payload });
+    if (data && data.ok) {
+      boardTasks.push(data.item);
+      renderTaskArea();
+      el.taskForm.classList.add("hidden");
+      resetTaskForm();
+      showToast("Aufgabe gespeichert.");
+    } else {
+      handleBoardWriteError(data);
+    }
   }
 
   // Standalone team-chip picker for the board forms (deliberately separate
@@ -1347,6 +1655,25 @@
       btn.addEventListener("click", () => {
         toggleInArray(selectedIds, t.id);
         renderTeamChipPicker(container, selectedIds);
+      });
+      container.appendChild(btn);
+    });
+  }
+
+  // Same pattern, but over the real Team-Board roster (TEAM_ROSTER) — used
+  // for Task "Schnittstellen", which must match the ids the server checks
+  // against (food/hospitality/club/… — different from the Superprompt
+  // Builder's own 9-team list used by renderTeamChipPicker above).
+  function renderRosterTeamChipPicker(container, selectedIds, excludeTeamId) {
+    container.innerHTML = "";
+    TEAM_ROSTER.filter(t => t.id !== excludeTeamId).forEach(t => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip" + (selectedIds.includes(t.id) ? " is-selected" : "");
+      btn.textContent = t.name;
+      btn.addEventListener("click", () => {
+        toggleInArray(selectedIds, t.id);
+        renderRosterTeamChipPicker(container, selectedIds, excludeTeamId);
       });
       container.appendChild(btn);
     });
@@ -1369,7 +1696,7 @@
       teamIds: [...pendingDeadlineTeamIds],
       description: el.deadlineDescInput.value.trim()
     };
-    const { data } = await postBoard({ resource: "deadlines", op: "create", editPassword: boardEditPassword, data: payload });
+    const { data } = await postBoard({ resource: "deadlines", op: "create", actor: currentIdentity, data: payload });
     if (data && data.ok) {
       boardDeadlines.push(data.item);
       boardDeadlines.sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
@@ -1418,7 +1745,7 @@
         description: el.sharedFileDescInput.value.trim(),
         important: el.sharedFileImportantCheckbox.checked
       };
-      const { data } = await postBoard({ resource: "files", op: "upload", editPassword: boardEditPassword, data: payload });
+      const { data } = await postBoard({ resource: "files", op: "upload", actor: currentIdentity, data: payload });
       if (data && data.ok) {
         boardFiles.unshift(data.item);
         renderSharedFiles();
@@ -1659,19 +1986,39 @@
     el.navBoardBtn.addEventListener("click", () => switchTopNav("board"));
     el.goToBoardFilesBtn.addEventListener("click", () => switchTopNav("board"));
 
-    // --- Team-Board: unlock ---
-    el.unlockEditBtn.addEventListener("click", () => {
-      el.unlockPasswordInput.classList.remove("hidden");
-      el.unlockConfirmBtn.classList.remove("hidden");
-      el.unlockPasswordInput.focus();
+    // --- Team-Board: identity ("Wer bist du?") ---
+    el.identityNameSelect.addEventListener("change", () => {
+      const name = el.identityNameSelect.value;
+      el.identityTeamDisambigSelect.classList.add("hidden");
+      el.identityTeamDisambigSelect.innerHTML = "";
+      if (!name) return;
+      const teamIds = rosterNameIndex[name] || [];
+      if (teamIds.length === 1) {
+        finalizeIdentity(name, teamIds[0]);
+      } else if (teamIds.length > 1) {
+        const hint = document.createElement("option");
+        hint.value = "";
+        hint.textContent = "Du hast zwei Rollen — als welches Team?";
+        el.identityTeamDisambigSelect.appendChild(hint);
+        teamIds.forEach(tid => {
+          const team = getRosterTeamById(tid);
+          const opt = document.createElement("option");
+          opt.value = tid;
+          opt.textContent = team ? team.name : tid;
+          el.identityTeamDisambigSelect.appendChild(opt);
+        });
+        el.identityTeamDisambigSelect.classList.remove("hidden");
+        el.identityTeamDisambigSelect.focus();
+        if (!doubleRoleHintShown) {
+          doubleRoleHintShown = true;
+          showToast("Du hast zwei Rollen — wähle, in welcher du gerade arbeitest.");
+        }
+      }
     });
-    el.unlockConfirmBtn.addEventListener("click", () => {
-      const pw = el.unlockPasswordInput.value;
-      if (!pw) return;
-      tryUnlockBoard(pw);
-    });
-    el.unlockPasswordInput.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") { ev.preventDefault(); el.unlockConfirmBtn.click(); }
+    el.identityTeamDisambigSelect.addEventListener("change", () => {
+      const teamId = el.identityTeamDisambigSelect.value;
+      const name = el.identityNameSelect.value;
+      if (teamId && name) finalizeIdentity(name, teamId);
     });
 
     // --- Team-Board: deadlines ---
@@ -1709,6 +2056,17 @@
       el.otherFilesToggle.setAttribute("aria-expanded", String(!expanded));
       el.otherFilesBody.classList.toggle("hidden", expanded);
     });
+
+    // --- Team-Board: tasks ---
+    el.addTaskBtn.addEventListener("click", () => {
+      resetTaskForm();
+      el.taskForm.classList.remove("hidden");
+    });
+    el.taskSaveBtn.addEventListener("click", saveTask);
+    el.taskCancelBtn.addEventListener("click", () => {
+      el.taskForm.classList.add("hidden");
+      resetTaskForm();
+    });
   }
 
   /* ---------------------------------------------------------
@@ -1735,10 +2093,15 @@
     renderDeadlineTeamFilter();
     renderTeamChipPicker(el.deadlineTeamChips, pendingDeadlineTeamIds);
     renderTeamChipPicker(el.sharedFileTeamChips, pendingSharedFileTeamIds);
+    renderIdentityNameOptions();
+    renderTeamSidebar();
     try {
-      const savedPw = sessionStorage.getItem(BOARD_PASSWORD_SESSION_KEY);
-      if (savedPw) tryUnlockBoard(savedPw, { silent: true });
-    } catch (e) { /* sessionStorage unavailable — stay locked */ }
+      const saved = sessionStorage.getItem(IDENTITY_SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.name && parsed.teamId) finalizeIdentity(parsed.name, parsed.teamId, { silent: true });
+      }
+    } catch (e) { /* sessionStorage unavailable — stay unidentified */ }
   }
 
   document.addEventListener("DOMContentLoaded", init);

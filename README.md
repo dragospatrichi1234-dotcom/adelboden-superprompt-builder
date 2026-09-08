@@ -8,7 +8,7 @@ Die Prompt-Erstellung selbst ist eine **reine Client-Anwendung** – kein Backen
 
 Optional gibt es eine **serverseitige KI-Integration** (OpenAI): der fertige Superprompt kann direkt an eine KI gesendet werden — der OpenAI API-Key liegt dabei ausschliesslich serverseitig in einer Netlify-Umgebungsvariable und erreicht den Browser nie. Ohne konfigurierten Key funktioniert der Prompt Builder unverändert vollständig ohne KI-Aufruf.
 
-Zusätzlich gibt es ein **Team-Board** (zweiter Tab oben): geteilte, für alle Teams sichtbare Deadlines und geteilte Projektdateien — zentral gespeichert (Netlify Blobs), nicht mehr nur lokal im Browser. Lesen ist für alle offen; Hinzufügen/Bearbeiten/Löschen ist mit einem gemeinsamen Bearbeitungs-Passwort geschützt. Deadlines fliessen automatisch als Kontext in jede KI-Generierung ein.
+Zusätzlich gibt es ein **Team-Board** (zweiter Tab oben): geteilte, für alle Teams sichtbare Deadlines, Aufgaben pro Team und geteilte Projektdateien — zentral gespeichert (Netlify Blobs), nicht mehr nur lokal im Browser. Lesen ist für alle offen; Bearbeiten erfordert eine Namensauswahl ("Wer bist du?") statt eines Passworts, mit rollenbasierten Rechten (Projektleitung vs. eigenes Team). Deadlines fliessen automatisch als Kontext in jede KI-Generierung ein.
 
 ## Dateien
 
@@ -19,7 +19,7 @@ Zusätzlich gibt es ein **Team-Board** (zweiter Tab oben): geteilte, für alle T
 | `data.js` | Projektdaten: Teams, Presets, Risiken, Output-Formate, Demo-Daten, KI-Konfiguration |
 | `app.js` | Anwendungslogik: State, Rendering, Prompt-Generierung, Score, Export, Datei-Upload, KI-Aufrufe, Team-Board |
 | `netlify/functions/generate-ai.mjs` | Netlify Function: serverseitiger, sicherer Aufruf der OpenAI Responses API (liest `OPENAI_API_KEY`, extrahiert DOCX-Text dependency-frei, reicht PDFs nativ an OpenAI weiter) |
-| `netlify/functions/shared-board.mjs` | Netlify Function: CRUD für geteilte Deadlines & Datei-Metadaten (Netlify Blobs), Lesen offen, Schreiben mit `BOARD_EDIT_PASSWORD` geschützt |
+| `netlify/functions/shared-board.mjs` | Netlify Function: CRUD für geteilte Deadlines, Aufgaben (Tasks) & Datei-Metadaten (Netlify Blobs), Lesen offen, Schreiben über Namens-/Team-Identität (Team-Roster) geprüft |
 | `netlify/functions/shared-file-download.mjs` | Netlify Function: liefert geteilte Dateien zum Download aus (öffentlich lesbar) |
 | `package.json` | Einzige npm-Abhängigkeit: `@netlify/blobs` (offizielles, first-party Netlify-Paket für die geteilte Speicherung) |
 | `netlify.toml` | Deployment-Konfiguration für Netlify (Header, Caching, Functions-Verzeichnis) |
@@ -89,17 +89,18 @@ Der Button „Mit KI generieren“ funktioniert erst, wenn auf Netlify ein OpenA
 
 Das verwendete Modell ist in `netlify/functions/generate-ai.mjs` als zentrale Konstante `OPENAI_MODEL` (aktuell `gpt-4o-mini`) hinterlegt und kann dort jederzeit angepasst werden.
 
-## Team-Board konfigurieren (Bearbeitungs-Passwort)
+## Team-Board: Anmeldung & Rollen
 
-Das Team-Board (Tab „📅 Team-Board“) zeigt Deadlines und geteilte Dateien für **alle** Nutzer:innen offen an — dafür ist keine Konfiguration nötig. Um Deadlines/Dateien **hinzuzufügen, zu bearbeiten oder zu löschen**, braucht es ein gemeinsames Passwort:
+Das Team-Board (Tab „📅 Team-Board“) zeigt Deadlines, geteilte Dateien und Aufgaben für **alle** Nutzer:innen offen an — dafür ist keine Konfiguration nötig, kein Passwort mehr.
 
-1. Netlify → **Site configuration → Environment variables → Add a variable**
-2. Key: `BOARD_EDIT_PASSWORD`
-3. Value: ein Passwort eurer Wahl (z. B. `adelboden2027-team`) — dieses Passwort gebt ihr allen Teams weiter, die bearbeiten dürfen sollen
-4. **Deploys → Trigger deploy → Deploy site**
-5. Testen: Team-Board öffnen → **„Bearbeitung entsperren“** → Passwort eingeben → **„+ Deadline hinzufügen“** sollte jetzt anklickbar sein
+Um etwas **hinzuzufügen, zu bearbeiten oder zu löschen**, wählt jede Person oben im Team-Board einfach ihren eigenen Namen aus einer nach Team gruppierten Liste ("Wer bist du?"). Das ist **kein echtes Login** — der Name wird gegen die im Code hinterlegte Team-Roster-Liste (`TEAM_ROSTER` in `data.js`, gespiegelt in `netlify/functions/shared-board.mjs`) geprüft, rein um sinnvolles Verhalten zu führen, nicht um böswillige Zugriffe zu verhindern. Passt zum Charakter eines kursinternen Tools ohne echten Auftraggeber-Datenschutzbedarf.
 
-**Wichtig — auch dieses Passwort niemals im Code/GitHub eintragen**, nur in der Netlify-Umgebungsvariable. Ohne konfiguriertes `BOARD_EDIT_PASSWORD` bleibt das Team-Board les- aber nicht editierbar, mit einem klaren Hinweis statt eines Fehlers.
+**Rechte:**
+- Mitglieder der **Projektleitung** dürfen überall Aufgaben/Deadlines/Dateien anlegen, bearbeiten, löschen.
+- Alle anderen dürfen das nur für **ihr eigenes Team** — serverseitig geprüft, nicht nur im UI versteckt.
+- Deadlines und geteilte Dateien bleiben bewusst team-übergreifend offen bearbeitbar (kein striktes Team-Scoping, da sie oft mehrere Teams betreffen).
+
+**Team-Roster aktualisieren** (neue Mitglieder, Rollenwechsel): die Liste `TEAM_ROSTER` steht an zwei Stellen — `data.js` (Anzeige/Frontend) und `netlify/functions/shared-board.mjs` (serverseitige Rechteprüfung). Beide bei Änderungen synchron halten.
 
 Das Passwort wird pro Browser-Tab-Sitzung gemerkt (`sessionStorage`) — nach dem Entsperren muss es nicht bei jeder Aktion erneut eingegeben werden, aber nach Schliessen des Tabs schon wieder.
 
