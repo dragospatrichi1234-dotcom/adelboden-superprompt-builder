@@ -118,7 +118,7 @@
      --------------------------------------------------------- */
 
   function buildDefaultKontext(team) {
-    return `Der Sunrise VIP Cube ist Teil des ${PROJECT_META.location.split(",")[0]} (${PROJECT_META.eventDates}). Auftraggeber: ${PROJECT_META.auftraggeber}. VIP Hospitality im Obergeschoss (ca. ${PROJECT_META.guestsVip} Gäste), Sunrise Club im Erdgeschoss (ca. ${PROJECT_META.guestsClub} Gäste). ${team.contextHint}`;
+    return `Der Sunrise VIP Cube ist Teil des Hospitality-Projekts am ${PROJECT_META.location.split(", ")[1] || "FIS Ski World Cup Adelboden 2027"} (${PROJECT_META.eventDates}). Auftraggeber: ${PROJECT_META.auftraggeber}. VIP Hospitality im Obergeschoss (ca. ${PROJECT_META.guestsVip} Gäste), Sunrise Club im Erdgeschoss (ca. ${PROJECT_META.guestsClub} Gäste). ${team.contextHint}`;
   }
 
   function buildDefaultZiel(team) {
@@ -231,8 +231,9 @@
       "sharedFileImportantCheckbox",
       "teamTabsWrap", "teamRoadmapArea", "teamDocsArea",
       "roadmapFirstHint", "roadmapEmptyHint", "seedPhasesBtn", "roadmapTimeline", "roadmapPhaseTasks",
-      "teamMiroArea", "miroEmptyState", "miroSetupWrap", "miroUrlInput", "miroSaveBtn", "miroSetupBtn", "miroFrameWrap", "miroFrame", "miroEditBtn", "miroOpenFullBtn",
+      "teamMiroArea", "miroEmptyState", "miroSetupWrap", "miroUrlInput", "miroSaveBtn", "miroSetupBtn", "miroLinkWrap", "miroEditBtn", "miroOpenFullBtn",
       "dashboardStats", "dashboardDeadlines", "dashboardDeadlinesEmpty", "dashboardActivity", "dashboardActivityEmpty", "dashboardDocs", "dashboardDocsEmpty",
+      "myTasksLoginHint", "myTasksSection", "myTasksTeamLabel", "myTasksOverdue", "myTasksToday", "myTasksWeek", "myTasksReview", "myTasksBlocked",
       "addPhaseBtn", "phaseForm", "phaseNameInput", "phasePeriodInput", "phaseSummaryInput", "phaseSaveBtn", "phaseCancelBtn",
       "teamDocsSearch", "teamDocsPhaseFilter", "teamDocsList", "teamDocsEmptyHint", "goToUploadFromDocsBtn",
       "leitungHub", "leitungOverview", "leitungRoadmap", "leitungDecisions", "leitungOrg",
@@ -1538,6 +1539,7 @@
     renderSharedFiles();
     renderTeamSidebar();
     refreshActiveTeamView();
+    renderMyTasks();
   }
 
   function refreshActiveTeamView() {
@@ -1611,6 +1613,7 @@
       renderSharedFiles();
       renderTeamSidebar();
       refreshActiveTeamView();
+      renderMyTasks();
       if (!silent) showToast(`Angemeldet als ${currentIdentity.name}.`);
       return true;
     }
@@ -1998,13 +2001,11 @@
     if (existing && existing.url) {
       el.miroEmptyState.classList.add("hidden");
       el.miroSetupBtn.classList.add("hidden");
-      el.miroFrameWrap.classList.remove("hidden");
-      if (el.miroFrame.src !== existing.url) el.miroFrame.src = existing.url;
+      el.miroLinkWrap.classList.remove("hidden");
       el.miroOpenFullBtn.href = deriveMiroBoardUrl(existing.url);
       el.miroEditBtn.classList.toggle("hidden", !canEdit);
     } else {
-      el.miroFrameWrap.classList.add("hidden");
-      el.miroFrame.src = "";
+      el.miroLinkWrap.classList.add("hidden");
       el.miroEmptyState.classList.remove("hidden");
       el.miroSetupBtn.classList.remove("hidden");
     }
@@ -2049,6 +2050,48 @@
   /* ---------------------------------------------------------
      PROJEKT-DASHBOARD (Startansicht, bevor ein Team gewählt ist)
      --------------------------------------------------------- */
+
+  // "Meine Aufgaben" is team-scoped, not per-person — the task model has no
+  // individual assignee field, only teamId. Once logged in, this shows the
+  // logged-in person's own team's tasks, grouped by what needs attention.
+  function renderMyTasks() {
+    if (!currentIdentity) {
+      el.myTasksLoginHint.classList.remove("hidden");
+      el.myTasksSection.classList.add("hidden");
+      return;
+    }
+    el.myTasksLoginHint.classList.add("hidden");
+    el.myTasksSection.classList.remove("hidden");
+    const team = getRosterTeamById(currentIdentity.teamId);
+    el.myTasksTeamLabel.textContent = team ? `(${team.name})` : "";
+
+    const myTasks = boardTasks.filter(t => t.teamId === currentIdentity.teamId);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const in7Days = new Date(today.getTime() + 7 * 86400000);
+
+    const activeTasks = myTasks.filter(t => t.status === "todo" || t.status === "in_progress");
+    const overdue = activeTasks.filter(t => t.deadline && new Date(t.deadline + "T00:00:00") < today);
+    const dueToday = activeTasks.filter(t => t.deadline && new Date(t.deadline + "T00:00:00").getTime() === today.getTime());
+    const dueThisWeek = activeTasks.filter(t => {
+      if (!t.deadline) return false;
+      const d = new Date(t.deadline + "T00:00:00");
+      return d > today && d <= in7Days;
+    });
+    const review = myTasks.filter(t => t.status === "review");
+    const blocked = myTasks.filter(t => t.status === "blocked");
+
+    const fillGroup = (containerEl, tasks) => {
+      containerEl.innerHTML = "";
+      tasks.forEach(t => containerEl.appendChild(buildTaskCard(t, { showTeamBadge: false })));
+      const emptyHint = document.querySelector(`[data-empty-for="${containerEl.id}"]`);
+      if (emptyHint) emptyHint.classList.toggle("hidden", tasks.length > 0);
+    };
+    fillGroup(el.myTasksOverdue, overdue);
+    fillGroup(el.myTasksToday, dueToday);
+    fillGroup(el.myTasksWeek, dueThisWeek);
+    fillGroup(el.myTasksReview, review);
+    fillGroup(el.myTasksBlocked, blocked);
+  }
 
   function renderProjectDashboard() {
     if (selectedSidebarTeamId) return;
@@ -2537,8 +2580,8 @@
     return dateStr;
   }
 
-  const TASK_STATUS_LABELS = { todo: "Offen", in_progress: "In Arbeit", done: "Erledigt", blocked: "Blockiert" };
-  const TASK_STATUS_ORDER = ["todo", "in_progress", "done", "blocked"];
+  const TASK_STATUS_LABELS = { todo: "Offen", in_progress: "In Arbeit", review: "Zur Prüfung", done: "Erledigt", blocked: "Blockiert" };
+  const TASK_STATUS_ORDER = ["todo", "in_progress", "review", "done", "blocked"];
 
   function buildTaskCard(task, { showTeamBadge } = {}) {
     const card = document.createElement("div");
@@ -3282,7 +3325,10 @@
     populateCategoryFilterOptions(el.sharedFileCategoryFilter);
     populateCategoryFilterOptions(el.teamDocsCategoryFilter);
     const boardReady = switchTopNav("board");
-    Promise.all([boardReady, ensureTasksAndPhasesLoaded(), fetchDecisionsFresh(), fetchMiroLinksFresh()]).then(renderProjectDashboard);
+    Promise.all([boardReady, ensureTasksAndPhasesLoaded(), fetchDecisionsFresh(), fetchMiroLinksFresh()]).then(() => {
+      renderProjectDashboard();
+      renderMyTasks();
+    });
     try {
       const saved = sessionStorage.getItem(IDENTITY_SESSION_KEY);
       if (saved) {
