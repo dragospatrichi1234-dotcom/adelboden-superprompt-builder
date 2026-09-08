@@ -166,11 +166,13 @@
       "advZiel", "advZielgruppe", "advGaeste", "advPhase",
       "teamTopics", "requirementChips", "requirementCustomInput", "requirementAddBtn",
       "interfaceChips", "riskToggle", "riskChips", "outputChips", "advStyle",
-      "generateBtn", "improveBtn", "demoBtn", "resetBtn",
+      "improveBtn", "demoBtn", "resetBtn",
       "scoreRing", "scoreRingProgress", "scoreNumber", "scoreLabel", "scoreSuggestions",
       "promptOutput", "copyBtn", "exportTxtBtn", "exportMdBtn", "toast",
-      "filesToggle", "filesBody", "uploadConsent", "dropzone", "fileInput",
+      "filesCard", "filesToggle", "filesBody", "uploadConsent", "dropzone", "fileInput",
       "fileSelectBtn", "fileList",
+      "stepProgressLabel", "showPromptLink", "copyBtnQuickLink", "goToFilesCardBtn",
+      "advSettingsToggle", "advSettingsBody",
       "aiModeSelect", "aiModeHint", "contextCharCount", "aiGenerateBtn",
       "promptOverrideBadge", "revertOverrideBtn",
       "aiResultToggle", "aiResultBody", "aiModelStatus",
@@ -697,6 +699,24 @@
     bodyEl.classList.remove("hidden");
   }
 
+  /* ---------------------------------------------------------
+     ADVANCED MODE — 4-step wizard
+     --------------------------------------------------------- */
+
+  const STEP_LABELS = { 1: "Aufgabe", 2: "Kontext", 3: "Anforderungen", 4: "Ergebnis" };
+  let currentAdvancedStep = 1;
+
+  function switchStep(n) {
+    currentAdvancedStep = n;
+    document.querySelectorAll(".step-tab").forEach(tab => {
+      tab.classList.toggle("is-active", Number(tab.dataset.step) === n);
+    });
+    document.querySelectorAll(".step-panel").forEach(panel => {
+      panel.classList.toggle("hidden", Number(panel.dataset.stepPanel) !== n);
+    });
+    if (el.stepProgressLabel) el.stepProgressLabel.textContent = `Schritt ${n} von 4 — ${STEP_LABELS[n]}`;
+  }
+
 
   /* ---------------------------------------------------------
      FILE UPLOAD (Projektdateien als Kontext)
@@ -838,7 +858,10 @@
   function updateAiModeHint() {
     const opt = AI_MODE_OPTIONS.find(o => o.id === state.aiMode) || AI_MODE_OPTIONS[0];
     el.aiModeHint.textContent = opt.hint;
-    el.aiGenerateBtn.disabled = state.aiMode === "none" || aiRequestInFlight;
+    // The primary button is always usable now: with "Prompt nur erstellen"
+    // it just assembles the prompt locally (free); only an in-flight AI
+    // request disables it.
+    el.aiGenerateBtn.disabled = aiRequestInFlight;
   }
 
   function showAiLoading(text) {
@@ -984,9 +1007,28 @@
     } finally {
       aiRequestInFlight = false;
       hideAiLoading();
-      el.aiGenerateBtn.textContent = "Mit KI generieren";
+      el.aiGenerateBtn.textContent = "✨ Mit KI erstellen";
       updateAiModeHint();
     }
+  }
+
+  function scrollToPreview() {
+    if (window.matchMedia("(max-width: 980px)").matches) {
+      document.querySelector(".preview-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  // Single dominant action for Advanced Mode: with "Prompt nur erstellen"
+  // (default, free) it just assembles the prompt locally — the exact
+  // behaviour the old separate "Prompt generieren" button had. With an AI
+  // mode selected, it triggers the corresponding paid AI call instead.
+  function generateOrCallAi() {
+    if (state.aiMode === "improve") { callAi("improve"); return; }
+    if (state.aiMode === "answer") { callAi("answer"); return; }
+    renderAll();
+    saveState();
+    showToast(state.teamId ? "Prompt generiert." : "Bitte zuerst ein Team auswählen.");
+    scrollToPreview();
   }
 
   /* ---------------------------------------------------------
@@ -1546,14 +1588,6 @@
       if (ev.key === "Enter") { ev.preventDefault(); el.requirementAddBtn.click(); }
     });
 
-    el.generateBtn.addEventListener("click", () => {
-      renderAll();
-      saveState();
-      showToast(state.teamId ? "Prompt generiert." : "Bitte zuerst ein Team auswählen.");
-      if (window.matchMedia("(max-width: 980px)").matches) {
-        document.querySelector(".preview-panel").scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
     el.improveBtn.addEventListener("click", improvePrompt);
     el.demoBtn.addEventListener("click", loadDemo);
     el.resetBtn.addEventListener("click", () => {
@@ -1564,9 +1598,23 @@
     el.exportTxtBtn.addEventListener("click", exportTxt);
     el.exportMdBtn.addEventListener("click", exportMd);
 
+    // --- Advanced Mode: step wizard ---
+    document.querySelectorAll(".step-tab").forEach(tab => {
+      tab.addEventListener("click", () => switchStep(Number(tab.dataset.step)));
+    });
+
+    // --- Advanced Mode: secondary quick-actions ---
+    if (el.showPromptLink) el.showPromptLink.addEventListener("click", scrollToPreview);
+    if (el.copyBtnQuickLink) el.copyBtnQuickLink.addEventListener("click", copyPrompt);
+    if (el.goToFilesCardBtn) el.goToFilesCardBtn.addEventListener("click", () => {
+      expandCollapsible(el.filesToggle, el.filesBody);
+      el.filesCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
     // --- Collapsible sections ---
     bindCollapsible(el.filesToggle, el.filesBody);
     bindCollapsible(el.aiResultToggle, el.aiResultBody);
+    bindCollapsible(el.advSettingsToggle, el.advSettingsBody);
 
     // --- File upload ---
     el.uploadConsent.addEventListener("change", () => {
@@ -1597,10 +1645,7 @@
       updateAiModeHint();
       saveState();
     });
-    el.aiGenerateBtn.addEventListener("click", () => {
-      if (state.aiMode === "improve") callAi("improve");
-      else if (state.aiMode === "answer") callAi("answer");
-    });
+    el.aiGenerateBtn.addEventListener("click", generateOrCallAi);
     el.aiAcceptBtn.addEventListener("click", acceptOptimizedPrompt);
     el.aiDiscardBtn.addEventListener("click", discardOptimizedPrompt);
     el.revertOverrideBtn.addEventListener("click", revertOverride);

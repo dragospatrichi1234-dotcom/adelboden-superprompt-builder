@@ -1388,3 +1388,130 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   margin-bottom: 10px;
 }
 
+/* ============================================================
+   ADVANCED MODE — 4-step wizard
+   ============================================================ */
+
+.step-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.step-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--white);
+  border: 1.5px solid var(--grey-200);
+  border-radius: var(--radius-md);
+  padding: 10px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.step-tab:hover { border-color: var(--ice-3); }
+
+.step-tab.is-active {
+  background: var(--navy);
+  border-color: var(--navy);
+}
+
+.step-tab-num {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--grey-200);
+  color: var(--grey-700-solid);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-tab.is-active .step-tab-num {
+  background: var(--white);
+  color: var(--navy);
+}
+
+.step-tab-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--grey-700-solid);
+}
+
+.step-tab.is-active .step-tab-label { color: var(--white); }
+
+.step-progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--grey-600);
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.step-panel { animation: fadeIn 0.2s ease; }
+
+.step-shortcut-card { background: var(--ice); border-color: var(--ice-3); }
+
+/* ---------------- Primary action ---------------- */
+
+.primary-action-card {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.btn-hero {
+  width: 100%;
+  max-width: 420px;
+  padding: 16px 24px;
+  font-size: 16px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 20px rgba(11, 31, 58, 0.18);
+}
+
+.btn-hero:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(11, 31, 58, 0.24); }
+
+.secondary-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.secondary-actions .link-btn {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.link-btn-muted { color: var(--grey-500); font-weight: 600; }
+.link-btn-muted:hover { color: var(--red-dark); }
+
+.secondary-sep { color: var(--grey-300); }
+
+/* ---------------- Score card plain-language title ---------------- */
+
+.score-word-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--grey-100);
+  color: var(--grey-600);
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+@media (max-width: 560px) {
+  .step-tab-label { display: none; }
+  .step-tab { padding: 10px; }
+}
+

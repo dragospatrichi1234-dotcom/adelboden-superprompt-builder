@@ -14,7 +14,7 @@
 <title>Adelboden 2027 – Superprompt Builder</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
-<link rel="stylesheet" href="./style.css?v=7">
+<link rel="stylesheet" href="./style.css?v=8">
 </head>
 <body>
 
@@ -75,93 +75,130 @@
       <p class="auto-note">Die App ergänzt automatisch: passende KI-Rolle, Projektkontext, Anforderungen, Schnittstellen, typische Risiken und den Qualitätscheck.</p>
     </div>
 
-    <!-- ADVANCED MODE FIELDS -->
+    <!-- ADVANCED MODE FIELDS: 4-step guided wizard -->
     <div id="advancedFields" class="mode-section hidden">
 
-      <div class="card">
-        <h3 class="card-title">Aufgabe</h3>
-        <textarea id="advAufgabe" rows="3" placeholder="Was soll die KI konkret tun?"></textarea>
+      <div class="step-tabs" role="tablist" aria-label="Schritt wählen">
+        <button type="button" class="step-tab is-active" data-step="1" role="tab" aria-selected="true"><span class="step-tab-num">1</span><span class="step-tab-label">Aufgabe</span></button>
+        <button type="button" class="step-tab" data-step="2" role="tab" aria-selected="false"><span class="step-tab-num">2</span><span class="step-tab-label">Kontext</span></button>
+        <button type="button" class="step-tab" data-step="3" role="tab" aria-selected="false"><span class="step-tab-num">3</span><span class="step-tab-label">Anforderungen</span></button>
+        <button type="button" class="step-tab" data-step="4" role="tab" aria-selected="false"><span class="step-tab-num">4</span><span class="step-tab-label">Ergebnis</span></button>
+      </div>
+      <p class="step-progress-label" id="stepProgressLabel">Schritt 1 von 4 — Aufgabe</p>
+
+      <!-- STEP 1 — Aufgabe -->
+      <div class="step-panel" data-step-panel="1">
+        <div class="card">
+          <h3 class="card-title">Aufgabe</h3>
+          <textarea id="advAufgabe" rows="3" placeholder="Was soll die KI konkret tun?"></textarea>
+        </div>
+        <div class="card two-col">
+          <div class="field">
+            <label for="advZiel">Ziel</label>
+            <textarea id="advZiel" rows="2" placeholder="Was soll erreicht werden?"></textarea>
+          </div>
+          <div class="field">
+            <label for="advZielgruppe">Zielgruppe</label>
+            <input id="advZielgruppe" type="text" placeholder="Für wen ist der Output?">
+          </div>
+        </div>
+        <p class="auto-note">Nicht sicher, wie ihr anfangen sollt? <button type="button" id="demoBtn" class="link-btn" title="Lädt ein passendes Beispiel für das gewählte Team (oder Sunrise Club, falls noch keins gewählt ist)">Beispiel laden</button></p>
       </div>
 
-      <div class="card two-col">
-        <div class="field">
-          <label for="advPersona">KI-Persona</label>
-          <input id="advPersona" type="text" placeholder="z.B. Erfahrene Barmanager:in…">
+      <!-- STEP 2 — Kontext -->
+      <div class="step-panel hidden" data-step-panel="2">
+        <div class="card">
+          <label for="advKontext">Kontext</label>
+          <textarea id="advKontext" rows="4" placeholder="Projektkontext, Rahmenbedingungen…"></textarea>
         </div>
-        <div class="field">
-          <label for="advFachgebiet">Fachgebiet</label>
-          <select id="advFachgebiet"></select>
+        <div class="card two-col">
+          <div class="field">
+            <label for="advGaeste">Gästezahl</label>
+            <input id="advGaeste" type="number" min="0" placeholder="z.B. 300">
+          </div>
+          <div class="field">
+            <label for="advPhase">Projektphase</label>
+            <select id="advPhase"></select>
+          </div>
         </div>
-      </div>
-
-      <div class="card">
-        <label for="advKontext">Kontext</label>
-        <textarea id="advKontext" rows="4" placeholder="Projektkontext, Rahmenbedingungen…"></textarea>
-      </div>
-
-      <div class="card two-col">
-        <div class="field">
-          <label for="advZiel">Ziel</label>
-          <textarea id="advZiel" rows="2" placeholder="Was soll erreicht werden?"></textarea>
+        <div class="card team-intel-card">
+          <h3 class="card-title">Team-Intelligenz — relevante Themen</h3>
+          <p class="hint">Klicke ein Thema an, um es als Anforderung zu übernehmen.</p>
+          <div id="teamTopics" class="chip-group topics"></div>
         </div>
-        <div class="field">
-          <label for="advZielgruppe">Zielgruppe</label>
-          <input id="advZielgruppe" type="text" placeholder="Für wen ist der Output?">
-        </div>
-      </div>
-
-      <div class="card two-col">
-        <div class="field">
-          <label for="advGaeste">Gästezahl</label>
-          <input id="advGaeste" type="number" min="0" placeholder="z.B. 300">
-        </div>
-        <div class="field">
-          <label for="advPhase">Projektphase</label>
-          <select id="advPhase"></select>
-        </div>
-      </div>
-
-      <div class="card team-intel-card">
-        <h3 class="card-title">Team-Intelligenz — relevante Themen</h3>
-        <p class="hint">Klicke ein Thema an, um es als Anforderung zu übernehmen.</p>
-        <div id="teamTopics" class="chip-group topics"></div>
-      </div>
-
-      <div class="card">
-        <h3 class="card-title">Anforderungen</h3>
-        <div id="requirementChips" class="chip-group multi"></div>
-        <div class="chip-add">
-          <input id="requirementCustomInput" type="text" placeholder="Eigene Anforderung hinzufügen…">
-          <button id="requirementAddBtn" class="btn btn-small" type="button">+</button>
+        <div class="card">
+          <h3 class="card-title">Schnittstellen</h3>
+          <p class="hint leitgedanke">„Nicht in Abteilungen denken – in Schnittstellen denken.“</p>
+          <div id="interfaceChips" class="chip-group multi"></div>
         </div>
       </div>
 
-      <div class="card">
-        <h3 class="card-title">Schnittstellen</h3>
-        <p class="hint leitgedanke">„Nicht in Abteilungen denken – in Schnittstellen denken.“</p>
-        <div id="interfaceChips" class="chip-group multi"></div>
-      </div>
-
-      <div class="card risk-card">
-        <div class="risk-header">
-          <h3 class="card-title">Risiko-Modul</h3>
-          <label class="switch">
-            <input type="checkbox" id="riskToggle">
-            <span class="slider"></span>
-          </label>
-          <span class="switch-label">Risikoanalyse integrieren</span>
+      <!-- STEP 3 — Anforderungen -->
+      <div class="step-panel hidden" data-step-panel="3">
+        <div class="card">
+          <h3 class="card-title">Anforderungen</h3>
+          <div id="requirementChips" class="chip-group multi"></div>
+          <div class="chip-add">
+            <input id="requirementCustomInput" type="text" placeholder="Eigene Anforderung hinzufügen…">
+            <button id="requirementAddBtn" class="btn btn-small" type="button">+</button>
+          </div>
         </div>
-        <div id="riskChips" class="chip-group multi risk-chip-group"></div>
+        <div class="card risk-card">
+          <div class="risk-header">
+            <h3 class="card-title">Risikoanalyse</h3>
+            <label class="switch">
+              <input type="checkbox" id="riskToggle">
+              <span class="slider"></span>
+            </label>
+            <span class="switch-label">Risikoanalyse integrieren</span>
+          </div>
+          <div id="riskChips" class="chip-group multi risk-chip-group"></div>
+        </div>
+        <div class="card step-shortcut-card">
+          <h3 class="card-title">📎 Dateien &amp; Projektwissen</h3>
+          <p class="hint">Dokumente als Kontext anhängen oder die geteilte Wissensbasis im Team-Board nutzen.</p>
+          <button type="button" id="goToFilesCardBtn" class="btn btn-secondary btn-small">Dateien verwalten ↓</button>
+        </div>
       </div>
 
-      <div class="card">
-        <h3 class="card-title">Output-Format</h3>
-        <div id="outputChips" class="chip-group multi"></div>
-      </div>
+      <!-- STEP 4 — Ergebnis -->
+      <div class="step-panel hidden" data-step-panel="4">
+        <div class="card">
+          <h3 class="card-title">Wie soll das Ergebnis aussehen?</h3>
+          <div id="outputChips" class="chip-group multi"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Stil &amp; Tonalität</h3>
+          <select id="advStyle"></select>
+        </div>
+        <div class="card two-col">
+          <div class="field">
+            <label for="advPersona">Welche Expertise wird benötigt?</label>
+            <input id="advPersona" type="text" placeholder="z.B. Erfahrene Barmanager:in…">
+          </div>
+          <div class="field">
+            <label for="advFachgebiet">Fachbereich</label>
+            <select id="advFachgebiet"></select>
+          </div>
+        </div>
 
-      <div class="card">
-        <h3 class="card-title">Stil &amp; Tonalität</h3>
-        <select id="advStyle"></select>
+        <div class="card collapsible-card" id="advSettingsCard">
+          <button type="button" class="collapsible-header" id="advSettingsToggle" aria-expanded="false" aria-controls="advSettingsBody">
+            <span class="collapsible-title">⚙️ Weitere Einstellungen</span>
+            <span class="collapsible-chevron">▾</span>
+          </button>
+          <div class="collapsible-body hidden" id="advSettingsBody">
+            <div class="field">
+              <label for="aiModeSelect">Was soll die KI übernehmen?</label>
+              <select id="aiModeSelect"></select>
+              <p class="hint" id="aiModeHint"></p>
+            </div>
+            <div class="ai-context-meta">
+              <span id="contextCharCount">0 Zeichen Kontext</span>
+              <span class="cost-note">⚡ KI-Generierung kann externe API-Kosten verursachen.</span>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -204,25 +241,18 @@
       </div>
     </div>
 
-    <!-- KI-UNTERSTÜTZUNG -->
-    <div class="card ai-controls-card">
-      <h3 class="card-title">KI-Unterstützung</h3>
-      <div class="field">
-        <select id="aiModeSelect"></select>
-        <p class="hint" id="aiModeHint"></p>
+    <!-- PRIMARY ACTION: one dominant action, everything else secondary -->
+    <div class="primary-action-card">
+      <button id="aiGenerateBtn" class="btn btn-primary btn-hero" type="button" title="Generate with AI">✨ Mit KI erstellen</button>
+      <div class="secondary-actions">
+        <button type="button" id="showPromptLink" class="link-btn">Prompt anzeigen</button>
+        <span class="secondary-sep">·</span>
+        <button type="button" id="improveBtn" class="link-btn">Verbessern</button>
+        <span class="secondary-sep">·</span>
+        <button type="button" id="copyBtnQuickLink" class="link-btn">Kopieren</button>
+        <span class="secondary-sep">·</span>
+        <button type="button" id="resetBtn" class="link-btn link-btn-muted">Zurücksetzen</button>
       </div>
-      <div class="ai-context-meta">
-        <span id="contextCharCount">0 Zeichen Kontext</span>
-        <span class="cost-note">⚡ KI-Generierung kann externe API-Kosten verursachen.</span>
-      </div>
-      <button id="aiGenerateBtn" class="btn btn-primary btn-ai" type="button" title="Generate with AI" disabled>Mit KI generieren</button>
-    </div>
-
-    <div class="action-row">
-      <button id="generateBtn" class="btn btn-primary">Prompt generieren</button>
-      <button id="improveBtn" class="btn btn-secondary">Prompt verbessern</button>
-      <button id="demoBtn" class="btn btn-ghost" title="Lädt ein passendes Beispiel für das gewählte Team (oder Sunrise Club, falls noch keins gewählt ist)">Beispiel laden</button>
-      <button id="resetBtn" class="btn btn-ghost btn-danger-ghost">Zurücksetzen</button>
     </div>
 
   </section>
@@ -231,7 +261,7 @@
   <aside class="panel preview-panel">
 
     <div class="card score-card">
-      <h3 class="card-title">Prompt Quality Score</h3>
+      <h3 class="card-title">Wie gut ist dieser Auftrag beschrieben? <span class="score-word-badge">Score</span></h3>
       <div class="score-display">
         <div id="scoreRing" class="score-ring score-band-0">
           <svg viewBox="0 0 120 120" class="score-ring-svg">
@@ -435,6 +465,6 @@
 </footer>
 
 <script src="./data.js?v=6"></script>
-<script src="./app.js?v=8"></script>
+<script src="./app.js?v=9"></script>
 </body>
 </html>
