@@ -232,6 +232,7 @@
       "teamTabsWrap", "teamRoadmapArea", "teamDocsArea",
       "roadmapFirstHint", "roadmapEmptyHint", "seedPhasesBtn", "roadmapTimeline", "roadmapPhaseTasks",
       "teamMiroArea", "miroEmptyState", "miroSetupWrap", "miroUrlInput", "miroSaveBtn", "miroSetupBtn", "miroFrameWrap", "miroFrame", "miroEditBtn", "miroOpenFullBtn",
+      "dashboardStats", "dashboardDeadlines", "dashboardDeadlinesEmpty", "dashboardActivity", "dashboardActivityEmpty", "dashboardDocs", "dashboardDocsEmpty",
       "addPhaseBtn", "phaseForm", "phaseNameInput", "phasePeriodInput", "phaseSummaryInput", "phaseSaveBtn", "phaseCancelBtn",
       "teamDocsSearch", "teamDocsPhaseFilter", "teamDocsList", "teamDocsEmptyHint", "goToUploadFromDocsBtn",
       "leitungHub", "leitungOverview", "leitungRoadmap", "leitungDecisions", "leitungOrg",
@@ -1094,12 +1095,14 @@
     el.navBoardBtn.classList.toggle("is-active", isBoard);
     el.builderPage.classList.toggle("hidden", isBoard);
     el.boardPage.classList.toggle("hidden", !isBoard);
+    let boardDataPromise = Promise.resolve();
     if (isBoard && !boardDeadlinesLoaded) {
-      loadBoardData();
+      boardDataPromise = loadBoardData();
     }
     if (isBoard && !sbTeamsLoaded) {
       loadSupabaseTeams();
     }
+    return boardDataPromise;
   }
 
   // Never throws — network failures and non-JSON responses (e.g. the
@@ -2043,15 +2046,76 @@
      ÜBERSICHT: Fortschritt pro Team
      --------------------------------------------------------- */
 
+  /* ---------------------------------------------------------
+     PROJEKT-DASHBOARD (Startansicht, bevor ein Team gewählt ist)
+     --------------------------------------------------------- */
+
+  function renderProjectDashboard() {
+    if (selectedSidebarTeamId) return;
+
+    const operativeTeams = TEAM_ROSTER.filter(t => !t.isLeitung);
+    const doneCount = boardTasks.filter(t => t.status === "done").length;
+    const overallPct = boardTasks.length ? Math.round((doneCount / boardTasks.length) * 100) : null;
+    const notStartedCount = operativeTeams.filter(t => isTeamNotStarted(t.id)).length;
+    const criticalCount = boardTasks.filter(t => t.status === "blocked" || taskDeadlineUrgency(t.deadline, t.status) === "is-overdue").length;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const in7Days = new Date(today.getTime() + 7 * 86400000);
+    const upcomingDeadlines = boardDeadlines.filter(d => {
+      if (!d.date || d.status === "erledigt") return false;
+      const dDate = new Date(d.date + "T00:00:00");
+      return dDate >= today && dDate <= in7Days;
+    }).sort((a, b) => a.date.localeCompare(b.date));
+
+    el.dashboardStats.innerHTML = `
+      <div class="dashboard-stat"><span class="dashboard-stat-value">${overallPct === null ? "–" : overallPct + "%"}</span><span class="dashboard-stat-label">Gesamtfortschritt</span></div>
+      <div class="dashboard-stat${notStartedCount > 0 ? " is-warning" : ""}"><span class="dashboard-stat-value">${notStartedCount}</span><span class="dashboard-stat-label">Teams ohne Aktivität</span></div>
+      <div class="dashboard-stat${criticalCount > 0 ? " is-critical" : ""}"><span class="dashboard-stat-value">${criticalCount}</span><span class="dashboard-stat-label">Kritische Aufgaben</span></div>
+      <div class="dashboard-stat"><span class="dashboard-stat-value">${upcomingDeadlines.length}</span><span class="dashboard-stat-label">Deadlines (7 Tage)</span></div>
+    `;
+
+    el.dashboardDeadlines.innerHTML = "";
+    upcomingDeadlines.slice(0, 6).forEach(d => el.dashboardDeadlines.appendChild(buildDeadlineCard(d)));
+    el.dashboardDeadlinesEmpty.classList.toggle("hidden", upcomingDeadlines.length > 0);
+
+    const activity = [];
+    boardTasks.forEach(t => { if (t.createdAt) activity.push({ ts: t.createdAt, icon: "✅", text: `Neue Aufgabe „${t.title}" (${getRosterTeamById(t.teamId)?.name || t.teamId})` }); });
+    boardDecisions.forEach(d => { if (d.createdAt) activity.push({ ts: d.createdAt, icon: "📝", text: `Neuer Eintrag im Entscheidungs-Journal (${getRosterTeamById(d.teamId)?.name || d.teamId})` }); });
+    boardFiles.forEach(f => { if (f.uploadedAt) activity.push({ ts: f.uploadedAt, icon: "📄", text: `Dokument hochgeladen: „${f.name}"` }); });
+    activity.sort((a, b) => b.ts - a.ts);
+
+    el.dashboardActivity.innerHTML = "";
+    activity.slice(0, 6).forEach(a => {
+      const row = document.createElement("div");
+      row.className = "dashboard-activity-item";
+      row.innerHTML = `<span class="dashboard-activity-icon">${a.icon}</span><span>${escapeHtml(a.text)}</span>`;
+      el.dashboardActivity.appendChild(row);
+    });
+    el.dashboardActivityEmpty.classList.toggle("hidden", activity.length > 0);
+
+    const importantDocs = boardFiles.filter(f => f.important);
+    el.dashboardDocs.innerHTML = "";
+    importantDocs.slice(0, 6).forEach(f => el.dashboardDocs.appendChild(buildSharedFileCard(f)));
+    el.dashboardDocsEmpty.classList.toggle("hidden", importantDocs.length > 0);
+  }
+
+  function teamDocsFor(teamId) {
+    const legacyTeamId = ROSTER_TO_LEGACY_TEAM_ID[teamId];
+    return boardFiles.filter(f => (f.teamIds || []).includes(legacyTeamId) || (f.teamIds || []).includes(teamId));
+  }
+
+  function isTeamNotStarted(teamId) {
+    const teamTasks = boardTasks.filter(t => t.teamId === teamId);
+    const teamPhases = boardPhases.filter(p => p.teamId === teamId);
+    const hasMiro = !!(boardMiroLinks[teamId] && boardMiroLinks[teamId].url);
+    return teamTasks.length === 0 && teamPhases.length === 0 && teamDocsFor(teamId).length === 0 && !hasMiro;
+  }
+
   function renderLeitungOverview() {
     el.teamOverviewCards.innerHTML = "";
     TEAM_ROSTER.filter(t => !t.isLeitung).forEach(team => {
       const teamTasks = boardTasks.filter(t => t.teamId === team.id);
-      const teamPhases = boardPhases.filter(p => p.teamId === team.id);
-      const legacyTeamId = ROSTER_TO_LEGACY_TEAM_ID[team.id];
-      const teamDocs = boardFiles.filter(f => (f.teamIds || []).includes(legacyTeamId) || (f.teamIds || []).includes(team.id));
-      const hasMiro = !!(boardMiroLinks[team.id] && boardMiroLinks[team.id].url);
-      const notStarted = teamTasks.length === 0 && teamPhases.length === 0 && teamDocs.length === 0 && !hasMiro;
+      const notStarted = isTeamNotStarted(team.id);
 
       const doneCount = teamTasks.filter(t => t.status === "done").length;
       const pct = teamTasks.length ? Math.round((doneCount / teamTasks.length) * 100) : null;
@@ -3217,7 +3281,8 @@
     populateDecisionTeamSelects();
     populateCategoryFilterOptions(el.sharedFileCategoryFilter);
     populateCategoryFilterOptions(el.teamDocsCategoryFilter);
-    switchTopNav("board");
+    const boardReady = switchTopNav("board");
+    Promise.all([boardReady, ensureTasksAndPhasesLoaded(), fetchDecisionsFresh(), fetchMiroLinksFresh()]).then(renderProjectDashboard);
     try {
       const saved = sessionStorage.getItem(IDENTITY_SESSION_KEY);
       if (saved) {
