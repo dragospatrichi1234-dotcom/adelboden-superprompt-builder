@@ -2072,6 +2072,20 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   background: var(--white);
   cursor: pointer;
   text-align: left;
+  border: 1.5px solid transparent;
+}
+.team-overview-card.is-not-started {
+  border-color: var(--tb-amber);
+  background: #fdf6ea;
+}
+.toc-not-started {
+  font-size: 11px;
+  font-weight: 700;
+  color: #a8681a;
+  background: #fdf1e0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
 }
 
 .toc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
