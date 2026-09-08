@@ -795,6 +795,13 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   margin-bottom: 14px;
 }
 
+.upload-privacy-hint {
+  font-size: 11px;
+  color: var(--grey-600);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
 .upload-consent {
   display: flex;
   align-items: flex-start;
