@@ -222,6 +222,7 @@
       "sharedFileList", "sharedFileEmptyHint", "showSharedFileFormBtn",
       "sharedFileUploadForm", "sharedFileInput", "sharedFileSelectBtn", "sharedFileSelectedName",
       "sharedFileDescInput", "sharedFileTeamChips", "sharedFileUploadBtn", "sharedFileCancelBtn",
+      "sharedFileCategorySelect", "sharedFileCategoryFilter", "teamDocsCategoryFilter",
       "importantFileList", "importantFileEmptyHint",
       "otherFilesToggle", "otherFilesToggleLabel", "otherFilesBody", "sharedFileSearch",
       "sharedFileImportantCheckbox",
@@ -1270,15 +1271,43 @@
 
   function humanFileSizeBoard(bytes) { return humanFileSize(bytes); }
 
+  const CATEGORY_LABELS = {
+    Konzept: "Konzept", Kalkulation: "Kalkulation / Budget", Protokoll: "Protokoll",
+    Vorlage: "Vorlage / Vorschrift", Bestellung: "Bestellung / Logistik",
+    Praesentation: "Präsentation", Sonstiges: "Sonstiges"
+  };
+
+  // Icon purely from mime/filename — no extra data entry needed from the user.
+  function fileTypeIcon(f) {
+    const mime = (f.mime || "").toLowerCase();
+    const name = (f.name || "").toLowerCase();
+    if (mime.includes("wordprocessingml") || mime.includes("msword") || name.endsWith(".doc") || name.endsWith(".docx")) return "📝";
+    if (mime.includes("spreadsheetml") || mime.includes("ms-excel") || name.endsWith(".xls") || name.endsWith(".xlsx") || name.endsWith(".csv")) return "📊";
+    if (mime.includes("presentationml") || mime.includes("ms-powerpoint") || name.endsWith(".ppt") || name.endsWith(".pptx")) return "📽️";
+    if (mime.includes("pdf") || name.endsWith(".pdf")) return "📕";
+    if (mime.startsWith("image/")) return "🖼️";
+    return "📄";
+  }
+
+  function populateCategoryFilterOptions(selectEl) {
+    Object.keys(CATEGORY_LABELS).forEach(key => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = CATEGORY_LABELS[key];
+      selectEl.appendChild(opt);
+    });
+  }
+
   function buildSharedFileCard(f) {
     const row = document.createElement("div");
     row.className = "file-item" + (f.important ? " is-important" : "");
     const teamNames = getTeamNamesByIds(f.teamIds || []);
     row.innerHTML = `
-      <span class="file-item-icon">📄</span>
+      <span class="file-item-icon">${fileTypeIcon(f)}</span>
       <span class="file-item-info">
         <span class="file-item-name">${escapeHtml(f.name)}</span>
         <span class="file-item-meta">${humanFileSizeBoard(f.size)}${f.description ? " · " + escapeHtml(f.description) : ""}</span>
+        ${f.category && CATEGORY_LABELS[f.category] ? `<span class="file-category-badge">${escapeHtml(CATEGORY_LABELS[f.category])}</span>` : ""}
         ${teamNames.length ? `<div class="deadline-teams">${teamNames.map(n => `<span class="deadline-team-tag">${escapeHtml(n)}</span>`).join("")}</div>` : ""}
       </span>
     `;
@@ -1315,6 +1344,9 @@
   function renderSharedFiles() {
     const important = boardFiles.filter(f => f.important);
     let others = boardFiles.filter(f => !f.important);
+
+    const categoryFilter = el.sharedFileCategoryFilter.value;
+    if (categoryFilter) others = others.filter(f => f.category === categoryFilter);
 
     const query = (el.sharedFileSearch.value || "").trim().toLowerCase();
     if (query) {
@@ -1755,6 +1787,8 @@
     let docs = boardFiles.filter(f => (f.teamIds || []).includes(legacyTeamId) || (f.teamIds || []).includes(selectedSidebarTeamId));
     const phaseFilter = el.teamDocsPhaseFilter.value;
     if (phaseFilter) docs = docs.filter(f => f.phaseId === phaseFilter);
+    const categoryFilter = el.teamDocsCategoryFilter.value;
+    if (categoryFilter) docs = docs.filter(f => f.category === categoryFilter);
     const query = (el.teamDocsSearch.value || "").trim().toLowerCase();
     if (query) {
       docs = docs.filter(f => f.name.toLowerCase().includes(query) || (f.description || "").toLowerCase().includes(query));
@@ -2275,6 +2309,7 @@
     el.sharedFileInput.value = "";
     el.sharedFileSelectedName.textContent = "Keine Datei gewählt";
     el.sharedFileDescInput.value = "";
+    el.sharedFileCategorySelect.value = "";
     el.sharedFileImportantCheckbox.checked = false;
     pendingSharedFileTeamIds = [];
     renderTeamChipPicker(el.sharedFileTeamChips, pendingSharedFileTeamIds);
@@ -2304,6 +2339,7 @@
         base64,
         teamIds: [...pendingSharedFileTeamIds],
         description: el.sharedFileDescInput.value.trim(),
+        category: el.sharedFileCategorySelect.value,
         important: el.sharedFileImportantCheckbox.checked
       };
       const { data } = await postBoard({ resource: "files", op: "upload", actor: currentIdentity, data: payload });
@@ -2613,6 +2649,7 @@
       resetSharedFileForm();
     });
     el.sharedFileSearch.addEventListener("input", renderSharedFiles);
+    el.sharedFileCategoryFilter.addEventListener("change", renderSharedFiles);
     el.otherFilesToggle.addEventListener("click", () => {
       const expanded = el.otherFilesToggle.getAttribute("aria-expanded") === "true";
       el.otherFilesToggle.setAttribute("aria-expanded", String(!expanded));
@@ -2649,6 +2686,7 @@
 
     // --- Team-Board: Dokumente-Tab ---
     el.teamDocsSearch.addEventListener("input", renderTeamDocs);
+    el.teamDocsCategoryFilter.addEventListener("change", renderTeamDocs);
     el.teamDocsPhaseFilter.addEventListener("change", renderTeamDocs);
     el.goToUploadFromDocsBtn.addEventListener("click", () => {
       const legacyTeamId = selectedSidebarTeamId ? ROSTER_TO_LEGACY_TEAM_ID[selectedSidebarTeamId] : null;
@@ -2713,6 +2751,8 @@
     renderIdentityNameOptions();
     renderTeamSidebar();
     populateDecisionTeamSelects();
+    populateCategoryFilterOptions(el.sharedFileCategoryFilter);
+    populateCategoryFilterOptions(el.teamDocsCategoryFilter);
     try {
       const saved = sessionStorage.getItem(IDENTITY_SESSION_KEY);
       if (saved) {
