@@ -1747,6 +1747,53 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   text-align: center;
 }
 
+/* ---------------- Projekt-Dashboard ---------------- */
+
+.project-dashboard { display: flex; flex-direction: column; gap: 20px; }
+
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.dashboard-stat {
+  border: 1.5px solid var(--tb-line, var(--grey-200));
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dashboard-stat-value { font-family: var(--tb-serif, var(--font)); font-size: 22px; font-weight: 800; color: var(--navy); }
+.dashboard-stat-label { font-size: 11px; color: var(--tb-muted, var(--grey-600)); }
+.dashboard-stat.is-warning { border-color: var(--tb-amber, #d99a2b); background: #fdf6ea; }
+.dashboard-stat.is-warning .dashboard-stat-value { color: #a8681a; }
+.dashboard-stat.is-critical { border-color: var(--red); background: var(--red-tint); }
+.dashboard-stat.is-critical .dashboard-stat-value { color: var(--red-dark); }
+
+.dashboard-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.dashboard-col .deadline-list { gap: 8px; }
+
+.dashboard-activity-list { display: flex; flex-direction: column; gap: 8px; }
+.dashboard-activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+  border-bottom: 1px solid var(--tb-line, var(--grey-100));
+  padding-bottom: 8px;
+}
+.dashboard-activity-icon { flex: none; }
+
+@media (max-width: 700px) {
+  .dashboard-columns { grid-template-columns: 1fr; }
+}
+
 .task-section-header {
   display: flex;
   align-items: center;
