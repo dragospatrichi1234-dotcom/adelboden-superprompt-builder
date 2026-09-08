@@ -36,7 +36,15 @@
       useOptimizedPrompt: false,
       aiResult: null,
       aiResultModel: null,
-      lastAiTask: null
+      lastAiTask: null,
+      // Tracks which scored fields the user actually typed/clicked
+      // themselves vs. left at the team's auto-filled default — drives the
+      // "Automatisch ergänzt" badges in the prompt preview.
+      touched: {
+        aufgabe: false, kontext: false, ziel: false, zielgruppe: false,
+        requirements: false, interfaces: false, risks: false,
+        outputFormats: false, style: false
+      }
     };
   }
 
@@ -49,6 +57,9 @@
   let uploadConsentGiven = false;
   let aiRequestInFlight = false;
   let fileIdCounter = 0;
+  let quickOutputShowAll = false;
+  let promptShortView = false;
+  const promptSectionCollapsed = new Set(); // section numbers the user manually collapsed this session
 
   // Team-Board: shared, persistent (Netlify Blobs) data — always fetched
   // fresh from the server, never stored in the local `state`/localStorage.
@@ -150,6 +161,16 @@
     state.risks = [...team.relevantRisks];
     state.outputFormats = team.outputSuggestions.length ? [team.outputSuggestions[0]] : [];
     state.style = STYLE_OPTIONS[0];
+    // Team selection overwrites these fields with fresh defaults, so they
+    // start out "auto-filled" again until the user actually edits them.
+    state.touched.kontext = false;
+    state.touched.ziel = false;
+    state.touched.zielgruppe = false;
+    state.touched.requirements = false;
+    state.touched.interfaces = false;
+    state.touched.risks = false;
+    state.touched.outputFormats = false;
+    state.touched.style = false;
     renderAll();
     saveState();
   }
@@ -172,7 +193,7 @@
     state.outputFormats = [v];
   }
 
-  function renderChipGroup(container, pool, selectedArr, onToggle, extraClass) {
+  function renderChipGroup(container, pool, selectedArr, onToggle, extraClass, touchedField) {
     container.innerHTML = "";
     pool.forEach(value => {
       const btn = document.createElement("button");
@@ -181,6 +202,7 @@
       btn.textContent = value;
       btn.addEventListener("click", () => {
         onToggle(value);
+        if (touchedField) state.touched[touchedField] = true;
         renderAll();
         saveState();
       });
@@ -198,7 +220,7 @@
       "modeQuickBtn", "modeAdvancedBtn", "progressFill",
       "teamGrid", "teamInfo",
       "quickFields", "advancedFields",
-      "quickAufgabe", "quickOutputChips",
+      "quickAufgabe", "quickOutputChips", "quickOutputMoreBtn", "quickOutputMoreLabel",
       "advAufgabe", "advPersona", "advFachgebiet", "advKontext",
       "advZiel", "advZielgruppe", "advGaeste", "advPhase",
       "teamTopics", "requirementChips", "requirementCustomInput", "requirementAddBtn",
@@ -206,6 +228,7 @@
       "improveBtn", "demoBtn", "resetBtn",
       "scoreRing", "scoreRingProgress", "scoreNumber", "scoreLabel", "scoreSuggestions",
       "promptOutput", "copyBtn", "exportTxtBtn", "exportMdBtn", "toast",
+      "promptShortViewBtn", "promptAssumptionsBar",
       "filesCard", "filesToggle", "filesBody", "uploadConsent", "dropzone", "fileInput",
       "fileSelectBtn", "fileList",
       "stepProgressLabel", "showPromptLink", "copyBtnQuickLink", "goToFilesCardBtn",
@@ -373,7 +396,16 @@
 
   function renderQuickFields() {
     if (document.activeElement !== el.quickAufgabe) el.quickAufgabe.value = state.aufgabe;
-    renderChipGroup(el.quickOutputChips, OUTPUT_FORMATS, state.outputFormats, setSingleOutputFormat, "chip-radio");
+
+    // Auto-expand if the current selection lives only in the "more" set,
+    // so a previously-picked format is never hidden from view.
+    const selectionNeedsExpand = state.outputFormats.some(v => !QUICK_OUTPUT_FORMATS_PRIMARY.includes(v));
+    const showAll = quickOutputShowAll || selectionNeedsExpand;
+    const pool = showAll ? OUTPUT_FORMATS : QUICK_OUTPUT_FORMATS_PRIMARY;
+
+    renderChipGroup(el.quickOutputChips, pool, state.outputFormats, setSingleOutputFormat, "chip-radio", "outputFormats");
+    el.quickOutputMoreBtn.setAttribute("aria-expanded", String(showAll));
+    el.quickOutputMoreLabel.textContent = showAll ? "Weniger Formate anzeigen" : "Weitere Formate anzeigen";
   }
 
   /* ---------------------------------------------------------
@@ -444,6 +476,7 @@
         btn.addEventListener("click", () => {
           if (!state.requirementPool.includes(topic)) state.requirementPool.push(topic);
           toggleInArray(state.requirements, topic);
+          state.touched.requirements = true;
           renderAll();
           saveState();
         });
@@ -452,7 +485,7 @@
     }
 
     // Requirements
-    renderChipGroup(el.requirementChips, state.requirementPool, state.requirements, v => toggleInArray(state.requirements, v));
+    renderChipGroup(el.requirementChips, state.requirementPool, state.requirements, v => toggleInArray(state.requirements, v), null, "requirements");
 
     // Interfaces (all teams except self)
     const interfacePool = TEAMS.filter(t => t.id !== state.teamId).map(t => t.id);
@@ -465,6 +498,7 @@
       btn.textContent = t.name;
       btn.addEventListener("click", () => {
         toggleInArray(state.interfaces, tid);
+        state.touched.interfaces = true;
         renderAll();
         saveState();
       });
@@ -474,10 +508,10 @@
     // Risk module
     el.riskToggle.checked = state.riskModuleEnabled;
     el.riskChips.classList.toggle("is-enabled", state.riskModuleEnabled);
-    renderChipGroup(el.riskChips, RISK_CATALOG, state.risks, v => toggleInArray(state.risks, v));
+    renderChipGroup(el.riskChips, RISK_CATALOG, state.risks, v => toggleInArray(state.risks, v), null, "risks");
 
     // Output formats (advanced)
-    renderChipGroup(el.outputChips, OUTPUT_FORMATS, state.outputFormats, setSingleOutputFormat, "chip-radio");
+    renderChipGroup(el.outputChips, OUTPUT_FORMATS, state.outputFormats, setSingleOutputFormat, "chip-radio", "outputFormats");
   }
 
   /* ---------------------------------------------------------
@@ -585,10 +619,144 @@
     return (state.useOptimizedPrompt && state.aiOptimizedPrompt) ? state.aiOptimizedPrompt : generatePlainText();
   }
 
+  // Which scored state field each numbered section reflects — used to show
+  // "Automatisch ergänzt" badges (see initialState().touched). Sections not
+  // listed here (PERSONA, QUALITÄTSCHECK) are always system-generated, so
+  // they never get the badge — flagging them would just be noise.
+  const SECTION_TOUCHED_FIELD = {
+    2: "aufgabe", 3: "kontext", 4: "ziel", 5: "zielgruppe",
+    6: "requirements", 7: "interfaces", 8: "risks", 9: "outputFormats", 10: "style"
+  };
+
+  const OPEN_POINT_PATTERN = /\[[^\]]*(nicht|Keine|Kein )[^\]]*\]/;
+
+  function generateShortText() {
+    const team = getTeamById(state.teamId);
+    const lines = [`Team: ${team ? team.name : "–"}`];
+    lines.push(`Aufgabe: ${state.aufgabe.trim() || "[nicht beschrieben]"}`);
+    lines.push(`Ziel: ${state.ziel.trim() || "[nicht formuliert]"}`);
+    if (state.zielgruppe.trim()) lines.push(`Zielgruppe: ${state.zielgruppe.trim()}`);
+    lines.push(`Output-Format: ${state.outputFormats.length ? state.outputFormats.join(", ") : "[nicht gewählt]"}`);
+    if (state.style) lines.push(`Stil: ${state.style}`);
+    return lines.join("\n");
+  }
+
+  function getPromptQualityFlags() {
+    if (!state.teamId) return { autoCount: 0, openCount: 0 };
+    const sections = buildSections();
+    let autoCount = 0, openCount = 0;
+    sections.forEach(s => {
+      const field = SECTION_TOUCHED_FIELD[s.n];
+      if (field && !state.touched[field]) autoCount++;
+      if (OPEN_POINT_PATTERN.test(s.body)) openCount++;
+    });
+    return { autoCount, openCount };
+  }
+
+  function renderPreviewSections() {
+    const sections = buildSections();
+    el.promptOutput.innerHTML = "";
+    sections.forEach(s => {
+      const field = SECTION_TOUCHED_FIELD[s.n];
+      // "Auto-filled" means the team/demo default put real text here — an
+      // untouched but still-empty field (open point) is a different thing
+      // and already gets its own signal via OPEN_POINT_PATTERN.
+      const isAuto = !!field && !state.touched[field] && !OPEN_POINT_PATTERN.test(s.body);
+
+      const details = document.createElement("details");
+      details.className = "prompt-section";
+      details.open = !promptSectionCollapsed.has(s.n);
+      details.addEventListener("toggle", () => {
+        if (details.open) promptSectionCollapsed.delete(s.n);
+        else promptSectionCollapsed.add(s.n);
+      });
+
+      const summary = document.createElement("summary");
+      summary.className = "prompt-section-summary";
+
+      const chevron = document.createElement("span");
+      chevron.className = "collapsible-chevron";
+      chevron.textContent = "▾";
+      summary.appendChild(chevron);
+
+      const title = document.createElement("span");
+      title.className = "prompt-section-title";
+      title.textContent = `${s.n}. ${s.title}`;
+      summary.appendChild(title);
+
+      if (isAuto) {
+        const badge = document.createElement("span");
+        badge.className = "prompt-section-badge-auto";
+        badge.textContent = "Automatisch ergänzt";
+        summary.appendChild(badge);
+      }
+
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "prompt-section-copy";
+      copyBtn.textContent = "Kopieren";
+      copyBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        copyTextToClipboard(`${s.n}. ${s.title}\n${s.body}`, `Abschnitt „${s.title}" kopiert!`);
+      });
+      summary.appendChild(copyBtn);
+
+      const body = document.createElement("div");
+      body.className = "prompt-section-body";
+      body.textContent = s.body;
+
+      details.appendChild(summary);
+      details.appendChild(body);
+      el.promptOutput.appendChild(details);
+    });
+  }
+
+  function renderAssumptionsBar() {
+    if (!el.promptAssumptionsBar) return;
+    const { autoCount, openCount } = getPromptQualityFlags();
+    if (!state.teamId || (autoCount === 0 && openCount === 0)) {
+      el.promptAssumptionsBar.classList.add("hidden");
+      el.promptAssumptionsBar.textContent = "";
+      return;
+    }
+    const parts = [];
+    if (autoCount > 0) parts.push(`${autoCount} automatisch ausgefüllte${autoCount === 1 ? "r Abschnitt" : " Abschnitte"}`);
+    if (openCount > 0) parts.push(`${openCount} offene${openCount === 1 ? "r Punkt" : " Punkte"}`);
+    el.promptAssumptionsBar.textContent = `⚠ ${parts.join(", ")} — vor dem Kopieren prüfen.`;
+    el.promptAssumptionsBar.classList.remove("hidden");
+  }
+
   function renderPreview() {
     const useOverride = !!(state.useOptimizedPrompt && state.aiOptimizedPrompt);
-    el.promptOutput.textContent = useOverride ? state.aiOptimizedPrompt : generatePlainText();
     if (el.promptOverrideBadge) el.promptOverrideBadge.classList.toggle("hidden", !useOverride);
+
+    if (!state.teamId) {
+      el.promptOutput.innerHTML = "";
+      const hint = document.createElement("p");
+      hint.className = "prompt-empty-hint";
+      hint.textContent = "👈 Wähle zuerst ein Team aus, um deinen Superprompt zu erstellen. Quick Mode: Team → Aufgabe → gewünschtes Ergebnis genügen bereits für einen vollständigen Prompt.";
+      el.promptOutput.appendChild(hint);
+      el.promptAssumptionsBar.classList.add("hidden");
+    } else if (useOverride) {
+      el.promptOutput.textContent = state.aiOptimizedPrompt;
+      el.promptAssumptionsBar.classList.add("hidden");
+    } else if (promptShortView) {
+      el.promptOutput.innerHTML = "";
+      const hint = document.createElement("p");
+      hint.className = "prompt-short-hint";
+      hint.textContent = "Kurzfassung nur zur Ansicht — Kopieren/Export nutzen immer den vollständigen Prompt.";
+      el.promptOutput.appendChild(hint);
+      const pre = document.createElement("div");
+      pre.className = "prompt-section-body";
+      pre.style.paddingLeft = "0";
+      pre.textContent = generateShortText();
+      el.promptOutput.appendChild(pre);
+      renderAssumptionsBar();
+    } else {
+      renderPreviewSections();
+      renderAssumptionsBar();
+    }
     updateContextCharCount();
   }
 
@@ -723,7 +891,18 @@
   }
 
   function copyPrompt() {
-    copyTextToClipboard(getActivePromptText(), "In Zwischenablage kopiert!");
+    const useOverride = !!(state.useOptimizedPrompt && state.aiOptimizedPrompt);
+    let msg = "In Zwischenablage kopiert!";
+    if (!useOverride) {
+      const { autoCount, openCount } = getPromptQualityFlags();
+      if (autoCount > 0 || openCount > 0) {
+        const parts = [];
+        if (autoCount > 0) parts.push(`${autoCount} automatisch ausgefüllt`);
+        if (openCount > 0) parts.push(`${openCount} offen`);
+        msg = `Kopiert — ⚠ ${parts.join(", ")}. Bitte prüfen.`;
+      }
+    }
+    copyTextToClipboard(getActivePromptText(), msg);
   }
 
   function downloadFile(filename, content, mime) {
@@ -3008,6 +3187,7 @@
     selectTeam(demo.teamId);
     state.mode = demo.mode;
     state.aufgabe = demo.aufgabe;
+    state.touched.aufgabe = false;
     state.fachgebiet = demo.fachgebiet;
     state.ziel = demo.ziel;
     state.zielgruppe = demo.zielgruppe;
@@ -3034,17 +3214,18 @@
     el.modeQuickBtn.addEventListener("click", () => { state.mode = "quick"; renderAll(); saveState(); });
     el.modeAdvancedBtn.addEventListener("click", () => { state.mode = "advanced"; renderAll(); saveState(); });
 
-    el.quickAufgabe.addEventListener("input", () => { state.aufgabe = el.quickAufgabe.value; if (document.activeElement !== el.advAufgabe) el.advAufgabe.value = state.aufgabe; renderPreview(); renderScore(); renderProgress(); saveState(); });
-    el.advAufgabe.addEventListener("input", () => { state.aufgabe = el.advAufgabe.value; if (document.activeElement !== el.quickAufgabe) el.quickAufgabe.value = state.aufgabe; renderPreview(); renderScore(); renderProgress(); saveState(); });
+    el.quickAufgabe.addEventListener("input", () => { state.aufgabe = el.quickAufgabe.value; state.touched.aufgabe = true; if (document.activeElement !== el.advAufgabe) el.advAufgabe.value = state.aufgabe; renderPreview(); renderScore(); renderProgress(); saveState(); });
+    el.quickOutputMoreBtn.addEventListener("click", () => { quickOutputShowAll = !quickOutputShowAll; renderQuickFields(); });
+    el.advAufgabe.addEventListener("input", () => { state.aufgabe = el.advAufgabe.value; state.touched.aufgabe = true; if (document.activeElement !== el.quickAufgabe) el.quickAufgabe.value = state.aufgabe; renderPreview(); renderScore(); renderProgress(); saveState(); });
 
     el.advPersona.addEventListener("input", () => { state.persona = el.advPersona.value; renderPreview(); saveState(); });
     el.advFachgebiet.addEventListener("change", () => { state.fachgebiet = el.advFachgebiet.value; renderPreview(); saveState(); });
-    el.advKontext.addEventListener("input", () => { state.kontext = el.advKontext.value; renderPreview(); renderScore(); saveState(); });
-    el.advZiel.addEventListener("input", () => { state.ziel = el.advZiel.value; renderPreview(); renderScore(); renderProgress(); saveState(); });
-    el.advZielgruppe.addEventListener("input", () => { state.zielgruppe = el.advZielgruppe.value; renderPreview(); renderScore(); renderProgress(); saveState(); });
+    el.advKontext.addEventListener("input", () => { state.kontext = el.advKontext.value; state.touched.kontext = true; renderPreview(); renderScore(); saveState(); });
+    el.advZiel.addEventListener("input", () => { state.ziel = el.advZiel.value; state.touched.ziel = true; renderPreview(); renderScore(); renderProgress(); saveState(); });
+    el.advZielgruppe.addEventListener("input", () => { state.zielgruppe = el.advZielgruppe.value; state.touched.zielgruppe = true; renderPreview(); renderScore(); renderProgress(); saveState(); });
     el.advGaeste.addEventListener("input", () => { state.gaesteanzahl = el.advGaeste.value; renderPreview(); saveState(); });
     el.advPhase.addEventListener("change", () => { state.phase = el.advPhase.value; renderPreview(); saveState(); });
-    el.advStyle.addEventListener("change", () => { state.style = el.advStyle.value; renderPreview(); renderScore(); saveState(); });
+    el.advStyle.addEventListener("change", () => { state.style = el.advStyle.value; state.touched.style = true; renderPreview(); renderScore(); saveState(); });
 
     el.riskToggle.addEventListener("change", () => {
       state.riskModuleEnabled = el.riskToggle.checked;
@@ -3072,6 +3253,12 @@
     });
 
     el.copyBtn.addEventListener("click", copyPrompt);
+    if (el.promptShortViewBtn) el.promptShortViewBtn.addEventListener("click", () => {
+      promptShortView = !promptShortView;
+      el.promptShortViewBtn.setAttribute("aria-pressed", String(promptShortView));
+      el.promptShortViewBtn.textContent = promptShortView ? "Vollständige Ansicht anzeigen" : "Kurzfassung anzeigen";
+      renderPreview();
+    });
     el.exportTxtBtn.addEventListener("click", exportTxt);
     el.exportMdBtn.addEventListener("click", exportMd);
 
