@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=13">
+<link rel="stylesheet" href="./style.css?v=14">
 </head>
 <body>
 
@@ -485,6 +485,7 @@
             <div class="docs-toolbar">
               <input id="teamDocsSearch" type="text" placeholder="🔎 Dokumente durchsuchen…" class="file-search-input">
               <select id="teamDocsPhaseFilter"><option value="">Alle Phasen</option></select>
+              <select id="teamDocsCategoryFilter"><option value="">Alle Kategorien</option></select>
             </div>
             <div id="teamDocsList" class="file-list"></div>
             <p id="teamDocsEmptyHint" class="hint hidden">Noch keine Dokumente für dieses Team. <button type="button" id="goToUploadFromDocsBtn" class="link-btn">Jetzt hochladen ↓</button></p>
@@ -602,7 +603,10 @@
           <span id="otherFilesToggleLabel">Weitere Dateien anzeigen</span> <span class="collapsible-chevron">▾</span>
         </button>
         <div id="otherFilesBody" class="hidden">
-          <input type="text" id="sharedFileSearch" placeholder="🔎 Dateien durchsuchen (Name, Beschreibung)…" class="file-search-input">
+          <div class="docs-toolbar">
+            <input type="text" id="sharedFileSearch" placeholder="🔎 Dateien durchsuchen (Name, Beschreibung)…" class="file-search-input">
+            <select id="sharedFileCategoryFilter"><option value="">Alle Kategorien</option></select>
+          </div>
           <div id="sharedFileList" class="file-list"></div>
           <p id="sharedFileEmptyHint" class="hint hidden">Keine weiteren Dateien.</p>
         </div>
@@ -619,6 +623,19 @@
         <div class="field">
           <label for="sharedFileDescInput">Beschreibung</label>
           <input id="sharedFileDescInput" type="text" placeholder="Optional…">
+        </div>
+        <div class="field">
+          <label for="sharedFileCategorySelect">Kategorie</label>
+          <select id="sharedFileCategorySelect">
+            <option value="">Keine Kategorie</option>
+            <option value="Konzept">Konzept</option>
+            <option value="Kalkulation">Kalkulation / Budget</option>
+            <option value="Protokoll">Protokoll</option>
+            <option value="Vorlage">Vorlage / Vorschrift</option>
+            <option value="Bestellung">Bestellung / Logistik</option>
+            <option value="Praesentation">Präsentation</option>
+            <option value="Sonstiges">Sonstiges</option>
+          </select>
         </div>
         <div class="field">
           <label>Betroffene Teams</label>
@@ -650,6 +667,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=8"></script>
-<script src="./app.js?v=15"></script>
+<script src="./app.js?v=16"></script>
 </body>
 </html>
