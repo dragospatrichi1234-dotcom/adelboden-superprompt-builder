@@ -148,7 +148,7 @@
     state.interfaces = [...team.interfaces];
     state.riskModuleEnabled = true;
     state.risks = [...team.relevantRisks];
-    state.outputFormats = [...team.outputSuggestions];
+    state.outputFormats = team.outputSuggestions.length ? [team.outputSuggestions[0]] : [];
     state.style = STYLE_OPTIONS[0];
     renderAll();
     saveState();
@@ -162,6 +162,14 @@
     const idx = arr.indexOf(value);
     if (idx === -1) arr.push(value);
     else arr.splice(idx, 1);
+  }
+
+  // Output-Format was multi-select, which is how "Ablaufplan" ended up
+  // combined with leftover team-default formats (e.g. "Customer Journey,
+  // Briefing, SOP") in the generated prompt — the user picks ONE result
+  // shape, so this always replaces the selection rather than adding to it.
+  function setSingleOutputFormat(v) {
+    state.outputFormats = [v];
   }
 
   function renderChipGroup(container, pool, selectedArr, onToggle, extraClass) {
@@ -365,7 +373,7 @@
 
   function renderQuickFields() {
     if (document.activeElement !== el.quickAufgabe) el.quickAufgabe.value = state.aufgabe;
-    renderChipGroup(el.quickOutputChips, OUTPUT_FORMATS, state.outputFormats, v => toggleInArray(state.outputFormats, v));
+    renderChipGroup(el.quickOutputChips, OUTPUT_FORMATS, state.outputFormats, setSingleOutputFormat, "chip-radio");
   }
 
   /* ---------------------------------------------------------
@@ -469,7 +477,7 @@
     renderChipGroup(el.riskChips, RISK_CATALOG, state.risks, v => toggleInArray(state.risks, v));
 
     // Output formats (advanced)
-    renderChipGroup(el.outputChips, OUTPUT_FORMATS, state.outputFormats, v => toggleInArray(state.outputFormats, v));
+    renderChipGroup(el.outputChips, OUTPUT_FORMATS, state.outputFormats, setSingleOutputFormat, "chip-radio");
   }
 
   /* ---------------------------------------------------------
@@ -593,6 +601,16 @@
       return { score: 0, suggestions: ["Wähle ein Team aus, um mit der Bewertung zu starten."] };
     }
 
+    // Weighted, not averaged — an equal-weight average let a prompt hit
+    // 100 from three cheap selections (style, one requirement) as easily as
+    // from a genuinely well-described task. Aufgabe/Ziel/Kontext now carry
+    // half the score, so a thin prompt can no longer look "ready".
+    const WEIGHTS = {
+      aufgabe: 0.20, ziel: 0.15, kontext: 0.15, zielgruppe: 0.10,
+      anforderungen: 0.10, schnittstellen: 0.10, risiken: 0.10,
+      outputFormat: 0.05, stil: 0.05
+    };
+
     const parts = {};
     parts.aufgabe = Math.min(state.aufgabe.trim().length / 20, 1);
     parts.kontext = Math.min(state.kontext.trim().length / 40, 1);
@@ -601,11 +619,11 @@
     parts.anforderungen = Math.min(state.requirements.length / 3, 1);
     parts.schnittstellen = Math.min(state.interfaces.length / 2, 1);
     parts.risiken = state.riskModuleEnabled ? Math.min(state.risks.length / 3, 1) : 0.4;
-    parts.outputFormat = state.outputFormats.length >= 2 ? 1 : (state.outputFormats.length === 1 ? 0.6 : 0);
+    parts.outputFormat = state.outputFormats.length >= 1 ? 1 : 0;
     parts.stil = state.style ? 1 : 0;
 
-    const sum = Object.values(parts).reduce((a, b) => a + b, 0);
-    const score = Math.round((sum / Object.keys(parts).length) * 100);
+    const weightedSum = Object.keys(parts).reduce((sum, key) => sum + parts[key] * WEIGHTS[key], 0);
+    const score = Math.round(weightedSum * 100);
 
     const suggestions = [];
     if (parts.aufgabe < 1) suggestions.push("Beschreibe die Aufgabe etwas konkreter.");
@@ -615,7 +633,7 @@
     if (parts.anforderungen < 1) suggestions.push("Füge mindestens 3 Anforderungen hinzu.");
     if (parts.schnittstellen < 1) suggestions.push("Wähle mindestens 2 Schnittstellen aus.");
     if (parts.risiken < 1) suggestions.push(state.riskModuleEnabled ? "Wähle mindestens 3 Risiken aus." : "Aktiviere die Risikoanalyse für mehr Robustheit.");
-    if (parts.outputFormat < 1) suggestions.push("Wähle mindestens 2 Output-Formate aus.");
+    if (parts.outputFormat < 1) suggestions.push("Wähle ein Output-Format aus.");
     if (parts.stil < 1) suggestions.push("Wähle einen Stil & Tonalität aus.");
 
     return { score, suggestions };
@@ -2955,11 +2973,9 @@
       if (state.risks.length >= 3) break;
       if (!state.risks.includes(r)) state.risks.push(r);
     }
-    for (const o of team.outputSuggestions) {
-      if (state.outputFormats.length >= 2) break;
-      if (!state.outputFormats.includes(o)) state.outputFormats.push(o);
+    if (state.outputFormats.length === 0) {
+      state.outputFormats = [team.outputSuggestions[0] || OUTPUT_FORMATS[0]];
     }
-    if (state.outputFormats.length === 0) state.outputFormats.push(OUTPUT_FORMATS[0]);
 
     renderAll();
     saveState();
@@ -3002,7 +3018,7 @@
     state.interfaces = [...demo.interfaces];
     state.riskModuleEnabled = demo.riskModuleEnabled;
     state.risks = [...demo.risks];
-    state.outputFormats = [...demo.outputFormats];
+    state.outputFormats = demo.outputFormats.length ? [demo.outputFormats[0]] : [];
     state.style = demo.style;
     renderAll();
     saveState();
