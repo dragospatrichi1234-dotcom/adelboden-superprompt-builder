@@ -40,11 +40,11 @@
 </div>
 
 <nav class="top-nav" aria-label="Seite wählen">
-  <button id="navBuilderBtn" class="top-nav-btn is-active" type="button">🛠️ Superprompt Builder</button>
-  <button id="navBoardBtn" class="top-nav-btn" type="button">📅 Team-Board</button>
+  <button id="navBuilderBtn" class="top-nav-btn" type="button">🛠️ Superprompt Builder</button>
+  <button id="navBoardBtn" class="top-nav-btn is-active" type="button">📅 Team-Board</button>
 </nav>
 
-<main class="layout" id="builderPage">
+<main class="layout hidden" id="builderPage">
 
   <!-- ==================== LEFT: BUILDER ==================== -->
   <section class="panel builder-panel">
@@ -349,7 +349,7 @@
 </main>
 
 <!-- ==================== TEAM-BOARD PAGE ==================== -->
-<main class="board-layout hidden" id="boardPage">
+<main class="board-layout" id="boardPage">
 
   <section class="panel board-panel">
 
@@ -735,6 +735,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=9"></script>
-<script src="./app.js?v=22"></script>
+<script src="./app.js?v=23"></script>
 </body>
 </html>
