@@ -227,6 +227,7 @@
       "sharedFileImportantCheckbox",
       "teamTabsWrap", "teamRoadmapArea", "teamDocsArea",
       "roadmapFirstHint", "roadmapEmptyHint", "seedPhasesBtn", "roadmapTimeline", "roadmapPhaseTasks",
+      "addPhaseBtn", "phaseForm", "phaseNameInput", "phasePeriodInput", "phaseSummaryInput", "phaseSaveBtn", "phaseCancelBtn",
       "teamDocsSearch", "teamDocsPhaseFilter", "teamDocsList", "teamDocsEmptyHint", "goToUploadFromDocsBtn",
       "leitungHub", "leitungOverview", "leitungRoadmap", "leitungDecisions", "leitungOrg",
       "teamOverviewCards", "masterRoadmapTimeline",
@@ -1583,6 +1584,9 @@
 
     populateTaskPhaseSelect(phases);
 
+    el.addPhaseBtn.disabled = !canEdit;
+    el.addPhaseBtn.title = canEdit ? "" : "Nur das zuständige Team kann Phasen anlegen";
+
     if (!phases.length) {
       el.roadmapEmptyHint.classList.remove("hidden");
       el.seedPhasesBtn.classList.remove("hidden");
@@ -1610,6 +1614,7 @@
       node.innerHTML = `
         <span class="roadmap-phase-dot"></span>
         <span class="roadmap-phase-name">${escapeHtml(p.name)}</span>
+        ${p.period ? `<span class="roadmap-phase-period">${escapeHtml(p.period)}</span>` : ""}
         <span class="roadmap-phase-progress">${teamTasks.length ? pct + "%" : "–"}</span>
       `;
       node.addEventListener("click", () => {
@@ -1623,9 +1628,28 @@
     if (selectedRoadmapPhaseId) {
       const phase = phases.find(p => p.id === selectedRoadmapPhaseId);
       const tasksInPhase = boardTasks.filter(t => t.teamId === selectedSidebarTeamId && t.phaseId === selectedRoadmapPhaseId);
+
+      if (phase) {
+        const detail = document.createElement("div");
+        detail.className = "roadmap-phase-detail";
+        detail.innerHTML = `
+          <h5 class="task-column-title">${escapeHtml(phase.name)}${phase.period ? ` <span class="roadmap-phase-period-inline">— ${escapeHtml(phase.period)}</span>` : ""}</h5>
+          ${phase.summary ? `<p class="roadmap-phase-summary">${escapeHtml(phase.summary)}</p>` : ""}
+        `;
+        if (canEdit) {
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "decision-delete-btn";
+          delBtn.textContent = "✕ Phase löschen";
+          delBtn.addEventListener("click", () => deletePhase(phase.id));
+          detail.appendChild(delBtn);
+        }
+        el.roadmapPhaseTasks.appendChild(detail);
+      }
+
       const heading = document.createElement("h5");
       heading.className = "task-column-title";
-      heading.textContent = phase ? `Aufgaben in „${phase.name}“` : "Aufgaben";
+      heading.textContent = "Zugeordnete Aufgaben";
       el.roadmapPhaseTasks.appendChild(heading);
       if (tasksInPhase.length) {
         const list = document.createElement("div");
@@ -1648,6 +1672,47 @@
       boardPhases = boardPhases.filter(p => p.teamId !== selectedSidebarTeamId).concat(data.items || []);
       renderRoadmap();
       showToast("Standard-Phasen angelegt.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  function resetPhaseForm() {
+    el.phaseNameInput.value = "";
+    el.phasePeriodInput.value = "";
+    el.phaseSummaryInput.value = "";
+  }
+
+  async function savePhase() {
+    const name = el.phaseNameInput.value.trim();
+    if (!name) { showToast("Bitte einen Namen eingeben."); return; }
+    if (!selectedSidebarTeamId) return;
+    const payload = {
+      teamId: selectedSidebarTeamId,
+      name,
+      period: el.phasePeriodInput.value.trim(),
+      summary: el.phaseSummaryInput.value.trim()
+    };
+    const { data } = await postBoard({ resource: "phases", op: "create", actor: currentIdentity, data: payload });
+    if (data && data.ok) {
+      boardPhases.push(data.item);
+      renderRoadmap();
+      el.phaseForm.classList.add("hidden");
+      resetPhaseForm();
+      showToast("Phase gespeichert.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  async function deletePhase(id) {
+    if (!confirm("Diese Phase wirklich löschen?")) return;
+    const { data } = await postBoard({ resource: "phases", op: "delete", actor: currentIdentity, id });
+    if (data && data.ok) {
+      boardPhases = boardPhases.filter(p => p.id !== id);
+      if (selectedRoadmapPhaseId === id) selectedRoadmapPhaseId = null;
+      renderRoadmap();
+      showToast("Phase gelöscht.");
     } else {
       handleBoardWriteError(data);
     }
@@ -2572,6 +2637,15 @@
 
     // --- Team-Board: Roadmap ---
     el.seedPhasesBtn.addEventListener("click", seedDefaultPhases);
+    el.addPhaseBtn.addEventListener("click", () => {
+      resetPhaseForm();
+      el.phaseForm.classList.remove("hidden");
+    });
+    el.phaseSaveBtn.addEventListener("click", savePhase);
+    el.phaseCancelBtn.addEventListener("click", () => {
+      el.phaseForm.classList.add("hidden");
+      resetPhaseForm();
+    });
 
     // --- Team-Board: Dokumente-Tab ---
     el.teamDocsSearch.addEventListener("input", renderTeamDocs);
