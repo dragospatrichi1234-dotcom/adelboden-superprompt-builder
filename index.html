@@ -14,7 +14,7 @@
 <title>Adelboden 2027 – Superprompt Builder</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
-<link rel="stylesheet" href="./style.css?v=6">
+<link rel="stylesheet" href="./style.css?v=7">
 </head>
 <body>
 
@@ -378,8 +378,22 @@
         ⚠️ Nur projektbezogene Dokumente hochladen. Keine echten Gäste-, Mitarbeitenden-, Kunden-, Gesundheits-, Zahlungs- oder anderen sensiblen Personendaten verwenden.
       </div>
 
-      <div id="sharedFileList" class="file-list"></div>
-      <p id="sharedFileEmptyHint" class="hint hidden">Noch keine geteilten Dateien.</p>
+      <div class="important-files-block">
+        <h4 class="file-group-title">⭐ Wichtige Dokumente</h4>
+        <div id="importantFileList" class="file-list"></div>
+        <p id="importantFileEmptyHint" class="hint">Noch keine wichtigen Dokumente markiert.</p>
+      </div>
+
+      <div class="other-files-block">
+        <button type="button" id="otherFilesToggle" class="other-files-toggle" aria-expanded="false">
+          <span id="otherFilesToggleLabel">Weitere Dateien anzeigen</span> <span class="collapsible-chevron">▾</span>
+        </button>
+        <div id="otherFilesBody" class="hidden">
+          <input type="text" id="sharedFileSearch" placeholder="🔎 Dateien durchsuchen (Name, Beschreibung)…" class="file-search-input">
+          <div id="sharedFileList" class="file-list"></div>
+          <p id="sharedFileEmptyHint" class="hint hidden">Keine weiteren Dateien.</p>
+        </div>
+      </div>
 
       <button id="showSharedFileFormBtn" class="btn btn-secondary" type="button" disabled title="Bearbeitung zuerst entsperren">+ Datei hochladen</button>
 
@@ -397,6 +411,10 @@
           <label>Betroffene Teams</label>
           <div id="sharedFileTeamChips" class="chip-group multi"></div>
         </div>
+        <label class="upload-consent" for="sharedFileImportantCheckbox">
+          <input type="checkbox" id="sharedFileImportantCheckbox">
+          <span>⭐ Als wichtiges Dokument markieren (wird oben fixiert)</span>
+        </label>
         <div class="inline-form-actions">
           <button id="sharedFileUploadBtn" class="btn btn-primary" type="button" disabled>Hochladen</button>
           <button id="sharedFileCancelBtn" class="btn btn-ghost" type="button">Abbrechen</button>
@@ -417,6 +435,6 @@
 </footer>
 
 <script src="./data.js?v=6"></script>
-<script src="./app.js?v=7"></script>
+<script src="./app.js?v=8"></script>
 </body>
 </html>

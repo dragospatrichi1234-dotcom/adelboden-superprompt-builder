@@ -1330,3 +1330,61 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
 
 /* reuse .file-list / .file-item from AI upload panel for shared files too */
 
+/* ---------------- Important / other shared files ---------------- */
+
+.file-group-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--navy);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 4px 0 10px;
+}
+
+.important-files-block { margin-bottom: 4px; }
+
+.file-item.is-important {
+  border-color: #f0d68a;
+  background: #fdf8e9;
+}
+
+.file-star-btn {
+  flex: none;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.file-star-btn:hover { background: var(--grey-200); }
+.file-star-btn.is-starred { filter: none; }
+.file-star-btn:not(.is-starred) { opacity: 0.35; }
+
+.other-files-block { margin-top: 14px; }
+
+.other-files-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--grey-50);
+  border: 1px dashed var(--grey-300);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--grey-700-solid);
+  cursor: pointer;
+}
+.other-files-toggle:hover { color: var(--navy); border-color: var(--ice-3); }
+.other-files-toggle[aria-expanded="true"] .collapsible-chevron { transform: rotate(180deg); }
+
+.other-files-block #otherFilesBody { margin-top: 12px; }
+
+.file-search-input {
+  margin-bottom: 10px;
+}
+

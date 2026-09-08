@@ -185,7 +185,10 @@
       "deadlineDescInput", "deadlineSaveBtn", "deadlineCancelBtn",
       "sharedFileList", "sharedFileEmptyHint", "showSharedFileFormBtn",
       "sharedFileUploadForm", "sharedFileInput", "sharedFileSelectBtn", "sharedFileSelectedName",
-      "sharedFileDescInput", "sharedFileTeamChips", "sharedFileUploadBtn", "sharedFileCancelBtn"
+      "sharedFileDescInput", "sharedFileTeamChips", "sharedFileUploadBtn", "sharedFileCancelBtn",
+      "importantFileList", "importantFileEmptyHint",
+      "otherFilesToggle", "otherFilesToggleLabel", "otherFilesBody", "sharedFileSearch",
+      "sharedFileImportantCheckbox"
     ].forEach(id => { el[id] = document.getElementById(id); });
   }
 
@@ -920,12 +923,17 @@
     const promptText = getActivePromptText();
     const filesPayload = buildFilesPayload();
 
-    if (!boardDeadlinesLoaded) {
-      try { await loadBoardData(); } catch (e) { /* AI call still works without deadline context */ }
-    }
+    // Always fetch fresh Team-Board data right before an AI call — deadlines
+    // and documents can change between calls, and this is cheap (small JSON).
+    try { await Promise.all([fetchDeadlinesFresh(), fetchFilesFresh()]); } catch (e) { /* AI call still works without Team-Board context */ }
+
     const deadlinesBlock = buildDeadlinesContextBlock();
     if (deadlinesBlock) {
       filesPayload.push({ name: "Team-Board Deadlines", kind: "text", text: deadlinesBlock });
+    }
+    const filesBlock = buildSharedFilesContextBlock();
+    if (filesBlock) {
+      filesPayload.push({ name: "Team-Board Dokumente", kind: "text", text: filesBlock });
     }
 
     const approxChars = promptText.length + filesPayload.reduce((s, f) => s + (f.text ? f.text.length : 0), 0);
@@ -1017,13 +1025,15 @@
     return boardDeadlines;
   }
 
+  async function fetchFilesFresh() {
+    const { data } = await postBoard({ resource: "files", op: "list" });
+    if (data && data.ok) boardFiles = data.items || [];
+    return boardFiles;
+  }
+
   async function loadBoardData() {
     try {
-      const [, fl] = await Promise.all([
-        fetchDeadlinesFresh(),
-        postBoard({ resource: "files", op: "list" })
-      ]);
-      if (fl.data && fl.data.ok) boardFiles = fl.data.items || [];
+      await Promise.all([fetchDeadlinesFresh(), fetchFilesFresh()]);
       renderDeadlines();
       renderSharedFiles();
     } catch (e) {
@@ -1139,40 +1149,82 @@
 
   function humanFileSizeBoard(bytes) { return humanFileSize(bytes); }
 
+  function buildSharedFileCard(f) {
+    const row = document.createElement("div");
+    row.className = "file-item" + (f.important ? " is-important" : "");
+    const teamNames = getTeamNamesByIds(f.teamIds || []);
+    row.innerHTML = `
+      <span class="file-item-icon">📄</span>
+      <span class="file-item-info">
+        <span class="file-item-name">${escapeHtml(f.name)}</span>
+        <span class="file-item-meta">${humanFileSizeBoard(f.size)}${f.description ? " · " + escapeHtml(f.description) : ""}</span>
+        ${teamNames.length ? `<div class="deadline-teams">${teamNames.map(n => `<span class="deadline-team-tag">${escapeHtml(n)}</span>`).join("")}</div>` : ""}
+      </span>
+    `;
+
+    if (boardUnlocked) {
+      const starBtn = document.createElement("button");
+      starBtn.type = "button";
+      starBtn.className = "file-star-btn" + (f.important ? " is-starred" : "");
+      starBtn.title = f.important ? "Als 'wichtig' entfernen" : "Als wichtiges Dokument markieren";
+      starBtn.textContent = "⭐";
+      starBtn.addEventListener("click", () => toggleFileImportant(f));
+      row.appendChild(starBtn);
+    }
+
+    const dl = document.createElement("a");
+    dl.href = `/.netlify/functions/shared-file-download?id=${encodeURIComponent(f.id)}`;
+    dl.className = "btn btn-small";
+    dl.textContent = "⬇ Download";
+    dl.setAttribute("download", f.name);
+    row.appendChild(dl);
+
+    if (boardUnlocked) {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "file-item-remove";
+      delBtn.setAttribute("aria-label", "Löschen");
+      delBtn.textContent = "✕";
+      delBtn.addEventListener("click", () => deleteSharedFile(f.id));
+      row.appendChild(delBtn);
+    }
+    return row;
+  }
+
   function renderSharedFiles() {
+    const important = boardFiles.filter(f => f.important);
+    let others = boardFiles.filter(f => !f.important);
+
+    const query = (el.sharedFileSearch.value || "").trim().toLowerCase();
+    if (query) {
+      others = others.filter(f =>
+        f.name.toLowerCase().includes(query) ||
+        (f.description || "").toLowerCase().includes(query)
+      );
+    }
+
+    el.importantFileList.innerHTML = "";
+    important.forEach(f => el.importantFileList.appendChild(buildSharedFileCard(f)));
+    el.importantFileEmptyHint.classList.toggle("hidden", important.length > 0);
+
     el.sharedFileList.innerHTML = "";
-    el.sharedFileEmptyHint.classList.toggle("hidden", boardFiles.length > 0);
+    others.forEach(f => el.sharedFileList.appendChild(buildSharedFileCard(f)));
+    el.sharedFileEmptyHint.classList.toggle("hidden", others.length > 0);
 
-    boardFiles.forEach(f => {
-      const row = document.createElement("div");
-      row.className = "file-item";
-      const teamNames = getTeamNamesByIds(f.teamIds || []);
-      row.innerHTML = `
-        <span class="file-item-icon">📄</span>
-        <span class="file-item-info">
-          <span class="file-item-name">${escapeHtml(f.name)}</span>
-          <span class="file-item-meta">${humanFileSizeBoard(f.size)}${f.description ? " · " + escapeHtml(f.description) : ""}</span>
-          ${teamNames.length ? `<div class="deadline-teams">${teamNames.map(n => `<span class="deadline-team-tag">${escapeHtml(n)}</span>`).join("")}</div>` : ""}
-        </span>
-      `;
-      const dl = document.createElement("a");
-      dl.href = `/.netlify/functions/shared-file-download?id=${encodeURIComponent(f.id)}`;
-      dl.className = "btn btn-small";
-      dl.textContent = "⬇ Download";
-      dl.setAttribute("download", f.name);
-      row.appendChild(dl);
+    const otherCount = boardFiles.filter(f => !f.important).length;
+    el.otherFilesToggleLabel.textContent = otherCount > 0
+      ? `Weitere Dateien anzeigen (${otherCount})`
+      : "Weitere Dateien anzeigen";
+  }
 
-      if (boardUnlocked) {
-        const delBtn = document.createElement("button");
-        delBtn.type = "button";
-        delBtn.className = "file-item-remove";
-        delBtn.setAttribute("aria-label", "Löschen");
-        delBtn.textContent = "✕";
-        delBtn.addEventListener("click", () => deleteSharedFile(f.id));
-        row.appendChild(delBtn);
-      }
-      el.sharedFileList.appendChild(row);
-    });
+  async function toggleFileImportant(f) {
+    const { data } = await postBoard({ resource: "files", op: "update", editPassword: boardEditPassword, id: f.id, data: { important: !f.important } });
+    if (data && data.ok) {
+      f.important = data.item.important;
+      renderSharedFiles();
+    } else {
+      handleBoardWriteError(data);
+    }
   }
 
   async function deleteSharedFile(id) {
@@ -1293,6 +1345,7 @@
     el.sharedFileInput.value = "";
     el.sharedFileSelectedName.textContent = "Keine Datei gewählt";
     el.sharedFileDescInput.value = "";
+    el.sharedFileImportantCheckbox.checked = false;
     pendingSharedFileTeamIds = [];
     renderTeamChipPicker(el.sharedFileTeamChips, pendingSharedFileTeamIds);
     el.sharedFileUploadBtn.disabled = true;
@@ -1320,7 +1373,8 @@
         mime: file.type || "application/octet-stream",
         base64,
         teamIds: [...pendingSharedFileTeamIds],
-        description: el.sharedFileDescInput.value.trim()
+        description: el.sharedFileDescInput.value.trim(),
+        important: el.sharedFileImportantCheckbox.checked
       };
       const { data } = await postBoard({ resource: "files", op: "upload", editPassword: boardEditPassword, data: payload });
       if (data && data.ok) {
@@ -1349,6 +1403,22 @@
       return `- ${d.date || "kein Datum"}: ${d.title}${teamPart}`;
     });
     return "Aktuelle offene Deadlines (Team-Board):\n" + lines.join("\n");
+  }
+
+  // Lightweight "what documents exist" awareness for the AI — only names/
+  // descriptions/links, never full file content (keeps this cheap and always-on,
+  // unlike the heavier optional file uploads the user attaches explicitly).
+  function buildSharedFilesContextBlock() {
+    if (!boardFiles.length) return null;
+    const sorted = [...boardFiles].sort((a, b) => (b.important ? 1 : 0) - (a.important ? 1 : 0));
+    const lines = sorted.slice(0, 25).map(f => {
+      const teamNames = getTeamNamesByIds(f.teamIds || []);
+      const teamPart = teamNames.length ? ` [${teamNames.join(", ")}]` : "";
+      const star = f.important ? "⭐ " : "";
+      const desc = f.description ? ` — ${f.description}` : "";
+      return `- ${star}${f.name}${desc}${teamPart}`;
+    });
+    return "Im Team-Board verfügbare Dokumente (nur Titel/Beschreibung, nicht der Inhalt — bei Bedarf im Team-Board herunterladen):\n" + lines.join("\n");
   }
 
   /* ---------------------------------------------------------
@@ -1587,6 +1657,12 @@
     el.sharedFileCancelBtn.addEventListener("click", () => {
       el.sharedFileUploadForm.classList.add("hidden");
       resetSharedFileForm();
+    });
+    el.sharedFileSearch.addEventListener("input", renderSharedFiles);
+    el.otherFilesToggle.addEventListener("click", () => {
+      const expanded = el.otherFilesToggle.getAttribute("aria-expanded") === "true";
+      el.otherFilesToggle.setAttribute("aria-expanded", String(!expanded));
+      el.otherFilesBody.classList.toggle("hidden", expanded);
     });
   }
 
