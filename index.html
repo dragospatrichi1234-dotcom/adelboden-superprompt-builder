@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=15">
+<link rel="stylesheet" href="./style.css?v=16">
 </head>
 <body>
 
@@ -368,6 +368,10 @@
           <select id="identityTeamDisambigSelect" class="hidden">
             <option value="">Als welches Team?</option>
           </select>
+          <span id="identityPinRow" class="identity-pin-row hidden">
+            <input type="password" inputmode="numeric" maxlength="6" id="identityPinInput" placeholder="PIN (Projektleitung)">
+            <button type="button" id="identityPinConfirmBtn" class="btn btn-small">OK</button>
+          </span>
         </div>
       </div>
     </div>
@@ -715,6 +719,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=8"></script>
-<script src="./app.js?v=17"></script>
+<script src="./app.js?v=18"></script>
 </body>
 </html>
