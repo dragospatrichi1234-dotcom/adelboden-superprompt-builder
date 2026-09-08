@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=24">
+<link rel="stylesheet" href="./style.css?v=25">
 </head>
 <body>
 
@@ -385,6 +385,38 @@
         </div>
 
         <div id="teamMainEmpty" class="project-dashboard">
+          <p id="myTasksLoginHint" class="hint">👤 Melde dich oben an, um direkt deine eigenen Aufgaben zu sehen.</p>
+          <div id="myTasksSection" class="hidden">
+            <h4 class="card-title">✅ Meine nächsten Aufgaben <span id="myTasksTeamLabel" class="my-tasks-team-label"></span></h4>
+            <div class="my-tasks-groups">
+              <div class="my-tasks-group">
+                <h5>Überfällig</h5>
+                <div id="myTasksOverdue" class="task-card-list"></div>
+                <p class="hint my-tasks-empty" data-empty-for="myTasksOverdue">Nichts überfällig. 🎉</p>
+              </div>
+              <div class="my-tasks-group">
+                <h5>Heute fällig</h5>
+                <div id="myTasksToday" class="task-card-list"></div>
+                <p class="hint my-tasks-empty" data-empty-for="myTasksToday">Nichts für heute.</p>
+              </div>
+              <div class="my-tasks-group">
+                <h5>Diese Woche</h5>
+                <div id="myTasksWeek" class="task-card-list"></div>
+                <p class="hint my-tasks-empty" data-empty-for="myTasksWeek">Nichts diese Woche.</p>
+              </div>
+              <div class="my-tasks-group">
+                <h5>Zur Prüfung</h5>
+                <div id="myTasksReview" class="task-card-list"></div>
+                <p class="hint my-tasks-empty" data-empty-for="myTasksReview">Nichts zur Prüfung.</p>
+              </div>
+              <div class="my-tasks-group">
+                <h5>Wartend (blockiert)</h5>
+                <div id="myTasksBlocked" class="task-card-list"></div>
+                <p class="hint my-tasks-empty" data-empty-for="myTasksBlocked">Nichts blockiert.</p>
+              </div>
+            </div>
+          </div>
+
           <div id="dashboardStats" class="dashboard-stats"></div>
 
           <div class="dashboard-columns">
@@ -521,21 +553,18 @@
             </div>
             <div id="miroSetupWrap" class="inline-form hidden">
               <div class="field">
-                <label for="miroUrlInput">Miro-Embed-Link</label>
-                <input id="miroUrlInput" type="url" placeholder="https://miro.com/app/live-embed/…">
-                <p class="hint">In Miro: „…" → „Einbetten" → Link hier einfügen.</p>
+                <label for="miroUrlInput">Miro-Board-Link</label>
+                <input id="miroUrlInput" type="url" placeholder="https://miro.com/app/board/…">
+                <p class="hint">In Miro: „Freigeben" → Link kopieren → hier einfügen.</p>
               </div>
               <div class="inline-form-actions">
                 <button type="button" id="miroSaveBtn" class="btn btn-primary">Speichern</button>
               </div>
             </div>
             <button type="button" id="miroSetupBtn" class="btn btn-secondary btn-small hidden" disabled title="Zuerst anmelden">+ Miro-Board hinterlegen</button>
-            <div id="miroFrameWrap" class="miro-frame-wrap hidden">
-              <iframe id="miroFrame" class="miro-frame" allowfullscreen></iframe>
-              <div class="miro-frame-actions">
-                <a id="miroOpenFullBtn" href="#" target="_blank" rel="noopener" class="btn btn-small">⤢ Vollbild öffnen</a>
-                <button type="button" id="miroEditBtn" class="btn btn-small btn-ghost hidden">✎ Link ändern</button>
-              </div>
+            <div id="miroLinkWrap" class="hidden">
+              <a id="miroOpenFullBtn" href="#" target="_blank" rel="noopener" class="btn btn-primary">🧠 Miro-Board öffnen ↗</a>
+              <button type="button" id="miroEditBtn" class="btn btn-small btn-ghost hidden">✎ Link ändern</button>
             </div>
           </div>
         </div>
@@ -778,7 +807,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
-<script src="./data.js?v=9"></script>
-<script src="./app.js?v=29"></script>
+<script src="./data.js?v=10"></script>
+<script src="./app.js?v=30"></script>
 </body>
 </html>
