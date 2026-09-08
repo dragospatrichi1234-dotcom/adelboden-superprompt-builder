@@ -231,6 +231,7 @@
       "sharedFileImportantCheckbox",
       "teamTabsWrap", "teamRoadmapArea", "teamDocsArea",
       "roadmapFirstHint", "roadmapEmptyHint", "seedPhasesBtn", "roadmapTimeline", "roadmapPhaseTasks",
+      "teamMiroArea", "miroEmptyState", "miroSetupWrap", "miroUrlInput", "miroSaveBtn", "miroSetupBtn", "miroFrameWrap", "miroFrame", "miroEditBtn",
       "addPhaseBtn", "phaseForm", "phaseNameInput", "phasePeriodInput", "phaseSummaryInput", "phaseSaveBtn", "phaseCancelBtn",
       "teamDocsSearch", "teamDocsPhaseFilter", "teamDocsList", "teamDocsEmptyHint", "goToUploadFromDocsBtn",
       "leitungHub", "leitungOverview", "leitungRoadmap", "leitungDecisions", "leitungOrg",
@@ -1550,6 +1551,7 @@
       renderTaskArea();
       renderRoadmap();
       renderTeamDocs();
+      if (currentTeamTab === "miro") renderMiroTab();
     }
   }
 
@@ -1745,11 +1747,13 @@
     el.teamTaskArea.classList.toggle("hidden", tabName !== "tasks");
     el.teamRoadmapArea.classList.toggle("hidden", tabName !== "roadmap");
     el.teamDocsArea.classList.toggle("hidden", tabName !== "docs");
+    el.teamMiroArea.classList.toggle("hidden", tabName !== "miro");
     if (tabName === "roadmap") {
       if (!roadmapHintShown) { roadmapHintShown = true; el.roadmapFirstHint.classList.remove("hidden"); }
       renderRoadmap();
     }
     if (tabName === "docs") renderTeamDocs();
+    if (tabName === "miro") renderMiroTab();
   }
 
   /* ---------------------------------------------------------
@@ -1946,6 +1950,63 @@
     el.teamDocsList.innerHTML = "";
     docs.forEach(f => el.teamDocsList.appendChild(buildSharedFileCard(f)));
     el.teamDocsEmptyHint.classList.toggle("hidden", docs.length > 0);
+  }
+
+  /* ---------------------------------------------------------
+     MIRO (ein Embed-Board pro Team)
+     --------------------------------------------------------- */
+
+  let boardMiroLinks = {};
+  let miroLinksLoaded = false;
+
+  async function fetchMiroLinksFresh() {
+    const { data } = await postBoard({ resource: "miro", op: "list" });
+    if (data && data.ok) {
+      boardMiroLinks = {};
+      (data.items || []).forEach(item => { boardMiroLinks[item.teamId] = item; });
+    }
+    miroLinksLoaded = true;
+    return boardMiroLinks;
+  }
+
+  async function renderMiroTab() {
+    if (!selectedSidebarTeamId) return;
+    if (!miroLinksLoaded) await fetchMiroLinksFresh();
+
+    const canEdit = !!currentIdentity && (currentIdentity.isLeitung || currentIdentity.teamId === selectedSidebarTeamId);
+    const existing = boardMiroLinks[selectedSidebarTeamId];
+
+    el.miroSetupBtn.disabled = !canEdit;
+    el.miroSetupBtn.title = canEdit ? "" : "Nur das zuständige Team kann den Miro-Link setzen";
+    el.miroSetupWrap.classList.add("hidden");
+
+    if (existing && existing.url) {
+      el.miroEmptyState.classList.add("hidden");
+      el.miroSetupBtn.classList.add("hidden");
+      el.miroFrameWrap.classList.remove("hidden");
+      if (el.miroFrame.src !== existing.url) el.miroFrame.src = existing.url;
+      el.miroEditBtn.classList.toggle("hidden", !canEdit);
+    } else {
+      el.miroFrameWrap.classList.add("hidden");
+      el.miroFrame.src = "";
+      el.miroEmptyState.classList.remove("hidden");
+      el.miroSetupBtn.classList.toggle("hidden", !canEdit);
+    }
+  }
+
+  async function saveMiroLink() {
+    if (!selectedSidebarTeamId || !currentIdentity) return;
+    const url = el.miroUrlInput.value.trim();
+    if (!url) { showToast("Bitte einen Miro-Link einfügen."); return; }
+    const { data } = await postBoard({ resource: "miro", op: "set", actor: currentIdentity, data: { teamId: selectedSidebarTeamId, url } });
+    if (data && data.ok) {
+      boardMiroLinks[selectedSidebarTeamId] = data.item;
+      el.miroUrlInput.value = "";
+      renderMiroTab();
+      showToast("Miro-Board gespeichert.");
+    } else {
+      handleBoardWriteError(data);
+    }
   }
 
   /* ---------------------------------------------------------
@@ -3039,6 +3100,15 @@
 
     // --- Team-Board: Roadmap ---
     el.seedPhasesBtn.addEventListener("click", seedDefaultPhases);
+    el.miroSetupBtn.addEventListener("click", () => {
+      el.miroSetupWrap.classList.remove("hidden");
+      el.miroUrlInput.focus();
+    });
+    el.miroEditBtn.addEventListener("click", () => {
+      el.miroSetupWrap.classList.remove("hidden");
+      el.miroUrlInput.focus();
+    });
+    el.miroSaveBtn.addEventListener("click", saveMiroLink);
     el.addPhaseBtn.addEventListener("click", () => {
       resetPhaseForm();
       el.phaseForm.classList.remove("hidden");
