@@ -98,7 +98,7 @@ const PROJECT_PHASES = [
 ];
 
 const PROJECT_META = {
-  eventDates: "7.–10. Januar 2027 (Mittwoch bis Sonntag)",
+  eventDates: "7.–10. Januar 2027 (Donnerstag bis Sonntag)",
   location: "Sunrise VIP Cube, FIS Ski World Cup Adelboden 2027",
   guestsVip: 150,
   guestsClub: 300,
