@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=26">
+<link rel="stylesheet" href="./style.css?v=27">
 </head>
 <body>
 
@@ -75,6 +75,9 @@
       <div class="card">
         <h3 class="card-title"><span class="step-num">3</span> Welches Ergebnis brauchst du?</h3>
         <div id="quickOutputChips" class="chip-group"></div>
+        <button type="button" id="quickOutputMoreBtn" class="other-files-toggle" aria-expanded="false">
+          <span id="quickOutputMoreLabel">Weitere Formate anzeigen</span> <span class="collapsible-chevron">▾</span>
+        </button>
       </div>
       <p class="auto-note">Die App ergänzt automatisch: passende KI-Rolle, Projektkontext, Anforderungen, Schnittstellen, typische Risiken und den Qualitätscheck.</p>
     </div>
@@ -290,10 +293,14 @@
           <button id="exportMdBtn" class="btn btn-small" type="button">Markdown</button>
         </div>
       </div>
+      <div class="preview-subheader">
+        <button type="button" id="promptShortViewBtn" class="preview-view-toggle" aria-pressed="false">Kurzfassung anzeigen</button>
+      </div>
       <div id="promptOverrideBadge" class="override-badge hidden">
         ✓ KI-optimierte Version aktiv — <button id="revertOverrideBtn" class="link-btn" type="button">zur Original-Version zurück</button>
       </div>
-      <pre id="promptOutput" class="prompt-output"></pre>
+      <div id="promptAssumptionsBar" class="prompt-assumptions-bar hidden"></div>
+      <div id="promptOutput" class="prompt-output"></div>
     </div>
 
     <!-- KI-ERGEBNIS (collapsible) -->
@@ -808,7 +815,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
-<script src="./data.js?v=10"></script>
-<script src="./app.js?v=32"></script>
+<script src="./data.js?v=11"></script>
+<script src="./app.js?v=33"></script>
 </body>
 </html>
