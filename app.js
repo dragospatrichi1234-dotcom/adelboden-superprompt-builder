@@ -218,6 +218,8 @@
       "taskForm", "taskTitleInput", "taskDescInput", "taskDeadlineInput", "taskPriorityInput",
       "taskAffectedTeamChips", "taskSaveBtn", "taskCancelBtn", "taskPhaseSelect",
       "deadlineTeamFilter", "deadlineList", "deadlineEmptyHint", "addDeadlineBtn",
+      "deadlineViewListBtn", "deadlineViewCalendarBtn", "deadlineListWrap", "deadlineCalendarWrap",
+      "calendarPrevBtn", "calendarMonthLabel", "calendarNextBtn", "calendarWeekdays", "calendarGrid", "calendarDayDetail",
       "deadlineForm", "deadlineTitleInput", "deadlineDateInput", "deadlineTeamChips",
       "deadlineDescInput", "deadlineSaveBtn", "deadlineCancelBtn",
       "sharedFileList", "sharedFileEmptyHint", "showSharedFileFormBtn",
@@ -1202,53 +1204,151 @@
     return "";
   }
 
-  function renderDeadlines() {
-    const filtered = deadlineTeamFilterValue === "all"
-      ? boardDeadlines
-      : boardDeadlines.filter(d => (d.teamIds || []).includes(deadlineTeamFilterValue) || (d.teamIds || []).length === 0);
+  function filterDeadlinesByTeam(list) {
+    return deadlineTeamFilterValue === "all"
+      ? list
+      : list.filter(d => (d.teamIds || []).includes(deadlineTeamFilterValue) || (d.teamIds || []).length === 0);
+  }
 
+  function buildDeadlineCard(d) {
+    const { day, month } = formatDeadlineDate(d.date);
+    const urgency = deadlineUrgencyClass(d.date, d.status);
+    const row = document.createElement("div");
+    row.className = "deadline-card" + (urgency ? " " + urgency : "");
+    const teamNames = getTeamNamesByIds(d.teamIds || []);
+    row.innerHTML = `
+      <div class="deadline-date-badge"><span class="dd-day">${day}</span><span class="dd-month">${month}</span></div>
+      <div class="deadline-info">
+        <div class="deadline-title${d.status === "erledigt" ? " is-done-text" : ""}">${escapeHtml(d.title)}</div>
+        <div class="deadline-meta">${d.date || "kein Datum"}</div>
+        ${d.description ? `<div class="deadline-desc">${escapeHtml(d.description)}</div>` : ""}
+        ${teamNames.length ? `<div class="deadline-teams">${teamNames.map(n => `<span class="deadline-team-tag">${escapeHtml(n)}</span>`).join("")}</div>` : ""}
+      </div>
+    `;
+    const actions = document.createElement("div");
+    actions.className = "deadline-actions";
+
+    const statusBtn = document.createElement("button");
+    statusBtn.type = "button";
+    statusBtn.className = "deadline-status-toggle" + (d.status === "erledigt" ? " is-done" : "");
+    statusBtn.textContent = d.status === "erledigt" ? "✓ Erledigt" : "Offen";
+    statusBtn.disabled = !boardUnlocked;
+    statusBtn.title = boardUnlocked ? "Status umschalten" : "Bearbeitung zuerst entsperren";
+    statusBtn.addEventListener("click", () => toggleDeadlineStatus(d));
+    actions.appendChild(statusBtn);
+
+    if (boardUnlocked) {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "deadline-delete-btn";
+      delBtn.textContent = "✕ Löschen";
+      delBtn.addEventListener("click", () => deleteDeadline(d.id));
+      actions.appendChild(delBtn);
+    }
+
+    row.appendChild(actions);
+    return row;
+  }
+
+  function renderDeadlines() {
+    const filtered = filterDeadlinesByTeam(boardDeadlines);
     el.deadlineList.innerHTML = "";
     el.deadlineEmptyHint.classList.toggle("hidden", filtered.length > 0);
+    filtered.forEach(d => el.deadlineList.appendChild(buildDeadlineCard(d)));
+    if (deadlineViewMode === "calendar") renderCalendarView();
+  }
 
+  /* ---------------------------------------------------------
+     DEADLINES: Kalenderansicht
+     --------------------------------------------------------- */
+
+  let deadlineViewMode = "list";
+  let calendarCursor = new Date();
+  let selectedCalendarDate = null;
+
+  function switchDeadlineView(mode) {
+    deadlineViewMode = mode;
+    el.deadlineViewListBtn.classList.toggle("is-active", mode === "list");
+    el.deadlineViewCalendarBtn.classList.toggle("is-active", mode === "calendar");
+    el.deadlineListWrap.classList.toggle("hidden", mode !== "list");
+    el.deadlineCalendarWrap.classList.toggle("hidden", mode !== "calendar");
+    if (mode === "calendar") renderCalendarView();
+  }
+
+  function toDateKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function renderCalendarView() {
+    const filtered = filterDeadlinesByTeam(boardDeadlines);
+    const byDate = {};
     filtered.forEach(d => {
-      const { day, month } = formatDeadlineDate(d.date);
-      const urgency = deadlineUrgencyClass(d.date, d.status);
-      const row = document.createElement("div");
-      row.className = "deadline-card" + (urgency ? " " + urgency : "");
-      const teamNames = getTeamNamesByIds(d.teamIds || []);
-      row.innerHTML = `
-        <div class="deadline-date-badge"><span class="dd-day">${day}</span><span class="dd-month">${month}</span></div>
-        <div class="deadline-info">
-          <div class="deadline-title${d.status === "erledigt" ? " is-done-text" : ""}">${escapeHtml(d.title)}</div>
-          <div class="deadline-meta">${d.date || "kein Datum"}</div>
-          ${d.description ? `<div class="deadline-desc">${escapeHtml(d.description)}</div>` : ""}
-          ${teamNames.length ? `<div class="deadline-teams">${teamNames.map(n => `<span class="deadline-team-tag">${escapeHtml(n)}</span>`).join("")}</div>` : ""}
-        </div>
-      `;
-      const actions = document.createElement("div");
-      actions.className = "deadline-actions";
-
-      const statusBtn = document.createElement("button");
-      statusBtn.type = "button";
-      statusBtn.className = "deadline-status-toggle" + (d.status === "erledigt" ? " is-done" : "");
-      statusBtn.textContent = d.status === "erledigt" ? "✓ Erledigt" : "Offen";
-      statusBtn.disabled = !boardUnlocked;
-      statusBtn.title = boardUnlocked ? "Status umschalten" : "Bearbeitung zuerst entsperren";
-      statusBtn.addEventListener("click", () => toggleDeadlineStatus(d));
-      actions.appendChild(statusBtn);
-
-      if (boardUnlocked) {
-        const delBtn = document.createElement("button");
-        delBtn.type = "button";
-        delBtn.className = "deadline-delete-btn";
-        delBtn.textContent = "✕ Löschen";
-        delBtn.addEventListener("click", () => deleteDeadline(d.id));
-        actions.appendChild(delBtn);
-      }
-
-      row.appendChild(actions);
-      el.deadlineList.appendChild(row);
+      if (!d.date) return;
+      if (!byDate[d.date]) byDate[d.date] = [];
+      byDate[d.date].push(d);
     });
+
+    const year = calendarCursor.getFullYear();
+    const month = calendarCursor.getMonth();
+    el.calendarMonthLabel.textContent = calendarCursor.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+
+    if (!el.calendarWeekdays.children.length) {
+      const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+      el.calendarWeekdays.innerHTML = weekdayNames.map(w => `<span>${w}</span>`).join("");
+    }
+
+    const firstOfMonth = new Date(year, month, 1);
+    const startOffset = (firstOfMonth.getDay() + 6) % 7; // Monday-first
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayKey = toDateKey(today);
+
+    el.calendarGrid.innerHTML = "";
+    const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+    for (let i = 0; i < totalCells; i++) {
+      const cellDate = new Date(year, month, i - startOffset + 1);
+      const inMonth = cellDate.getMonth() === month;
+      const key = toDateKey(cellDate);
+      const dayDeadlines = byDate[key] || [];
+
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "calendar-day" + (inMonth ? "" : " is-outside") + (key === todayKey ? " is-today" : "") + (key === selectedCalendarDate ? " is-selected" : "");
+      const dayNumSpan = `<span class="calendar-day-num">${cellDate.getDate()}</span>`;
+      const chips = dayDeadlines.slice(0, 2).map(d => {
+        const urgency = deadlineUrgencyClass(d.date, d.status);
+        return `<span class="calendar-day-chip${urgency ? " " + urgency : ""}">${escapeHtml(d.title)}</span>`;
+      }).join("");
+      const more = dayDeadlines.length > 2 ? `<span class="calendar-day-more">+${dayDeadlines.length - 2} mehr</span>` : "";
+      cell.innerHTML = dayNumSpan + chips + more;
+      cell.addEventListener("click", () => {
+        selectedCalendarDate = selectedCalendarDate === key ? null : key;
+        renderCalendarView();
+      });
+      el.calendarGrid.appendChild(cell);
+    }
+
+    if (selectedCalendarDate) {
+      const dayDeadlines = byDate[selectedCalendarDate] || [];
+      el.calendarDayDetail.classList.remove("hidden");
+      el.calendarDayDetail.innerHTML = "";
+      const heading = document.createElement("h5");
+      heading.className = "task-column-title";
+      const [y, m, dd] = selectedCalendarDate.split("-");
+      heading.textContent = new Date(Number(y), Number(m) - 1, Number(dd)).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+      el.calendarDayDetail.appendChild(heading);
+      if (dayDeadlines.length) {
+        dayDeadlines.forEach(d => el.calendarDayDetail.appendChild(buildDeadlineCard(d)));
+      } else {
+        const hint = document.createElement("p");
+        hint.className = "hint";
+        hint.textContent = "Keine Deadlines an diesem Tag.";
+        el.calendarDayDetail.appendChild(hint);
+      }
+    } else {
+      el.calendarDayDetail.classList.add("hidden");
+      el.calendarDayDetail.innerHTML = "";
+    }
   }
 
   async function toggleDeadlineStatus(d) {
@@ -2876,6 +2976,18 @@
     el.deadlineTeamFilter.addEventListener("change", () => {
       deadlineTeamFilterValue = el.deadlineTeamFilter.value;
       renderDeadlines();
+    });
+    el.deadlineViewListBtn.addEventListener("click", () => switchDeadlineView("list"));
+    el.deadlineViewCalendarBtn.addEventListener("click", () => switchDeadlineView("calendar"));
+    el.calendarPrevBtn.addEventListener("click", () => {
+      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
+      selectedCalendarDate = null;
+      renderCalendarView();
+    });
+    el.calendarNextBtn.addEventListener("click", () => {
+      calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
+      selectedCalendarDate = null;
+      renderCalendarView();
     });
     el.addDeadlineBtn.addEventListener("click", () => {
       resetDeadlineForm();
