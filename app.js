@@ -63,6 +63,18 @@
   let selectedSharedFile = null;
   let selectedSidebarTeamId = null;
 
+  // Team-Board Etapa 2: team phases (Roadmap), decisions (Entscheidungs-
+  // Journal) and the tab/hub navigation state — same "always fetch fresh"
+  // pattern as deadlines/files/tasks above.
+  let boardPhases = [];
+  let boardDecisions = [];
+  let currentTeamTab = "tasks";
+  let currentLeitungTab = "overview";
+  let selectedRoadmapPhaseId = null;
+  let roadmapHintShown = false;
+  let decisionTypeFilterValue = "";
+  let decisionTeamFilterValue = "";
+
   // Identity ("Wer bist du?") replaces the old shared-password model —
   // matches the project spec: no real login, just a claimed name/team
   // checked against the roster, purely to guide correct behaviour.
@@ -194,7 +206,7 @@
       "teamSidebar", "teamMainTitle", "teamMainLead", "teamMainEmpty", "teamTaskArea",
       "addTaskBtn", "taskListWeek", "taskListLater", "taskListBlocked",
       "taskForm", "taskTitleInput", "taskDescInput", "taskDeadlineInput", "taskPriorityInput",
-      "taskAffectedTeamChips", "taskSaveBtn", "taskCancelBtn",
+      "taskAffectedTeamChips", "taskSaveBtn", "taskCancelBtn", "taskPhaseSelect",
       "deadlineTeamFilter", "deadlineList", "deadlineEmptyHint", "addDeadlineBtn",
       "deadlineForm", "deadlineTitleInput", "deadlineDateInput", "deadlineTeamChips",
       "deadlineDescInput", "deadlineSaveBtn", "deadlineCancelBtn",
@@ -203,7 +215,16 @@
       "sharedFileDescInput", "sharedFileTeamChips", "sharedFileUploadBtn", "sharedFileCancelBtn",
       "importantFileList", "importantFileEmptyHint",
       "otherFilesToggle", "otherFilesToggleLabel", "otherFilesBody", "sharedFileSearch",
-      "sharedFileImportantCheckbox"
+      "sharedFileImportantCheckbox",
+      "teamTabsWrap", "teamRoadmapArea", "teamDocsArea",
+      "roadmapFirstHint", "roadmapEmptyHint", "seedPhasesBtn", "roadmapTimeline", "roadmapPhaseTasks",
+      "teamDocsSearch", "teamDocsPhaseFilter", "teamDocsList", "teamDocsEmptyHint", "goToUploadFromDocsBtn",
+      "leitungHub", "leitungOverview", "leitungRoadmap", "leitungDecisions", "leitungOrg",
+      "teamOverviewCards", "masterRoadmapTimeline",
+      "decisionTypeFilter", "decisionTeamFilter", "addDecisionBtn",
+      "decisionForm", "decisionTeamSelect", "decisionTypeSelect", "decisionTextInput",
+      "decisionSaveBtn", "decisionCancelBtn", "decisionList", "decisionEmptyHint",
+      "orgChartCards"
     ].forEach(id => { el[id] = document.getElementById(id); });
   }
 
@@ -1285,6 +1306,7 @@
     if (data && data.ok) {
       f.important = data.item.important;
       renderSharedFiles();
+      if (el.teamDocsArea && !el.teamDocsArea.classList.contains("hidden")) renderTeamDocs();
     } else {
       handleBoardWriteError(data);
     }
@@ -1296,6 +1318,7 @@
     if (data && data.ok) {
       boardFiles = boardFiles.filter(f => f.id !== id);
       renderSharedFiles();
+      if (el.teamDocsArea && !el.teamDocsArea.classList.contains("hidden")) renderTeamDocs();
       showToast("Datei gelöscht.");
     } else {
       handleBoardWriteError(data);
@@ -1325,7 +1348,23 @@
     renderDeadlines();
     renderSharedFiles();
     renderTeamSidebar();
-    renderTaskArea();
+    refreshActiveTeamView();
+  }
+
+  function refreshActiveTeamView() {
+    if (!selectedSidebarTeamId) return;
+    const team = getRosterTeamById(selectedSidebarTeamId);
+    if (!team) return;
+    if (team.isLeitung) {
+      renderLeitungOverview();
+      renderMasterRoadmap();
+      renderDecisionJournal();
+      renderOrgChart();
+    } else {
+      renderTaskArea();
+      renderRoadmap();
+      renderTeamDocs();
+    }
   }
 
   function renderIdentityUi() {
@@ -1350,7 +1389,7 @@
       renderDeadlines();
       renderSharedFiles();
       renderTeamSidebar();
-      renderTaskArea();
+      refreshActiveTeamView();
       if (!silent) showToast(`Angemeldet als ${currentIdentity.name}.`);
       return true;
     }
@@ -1361,6 +1400,16 @@
   /* ---------------------------------------------------------
      TEAM SIDEBAR + TASKS ("Nächste Schritte")
      --------------------------------------------------------- */
+
+  // Deadlines/shared-files still tag teams using the OLD Superprompt-Builder
+  // TEAMS ids (from before the Team-Board roster existed) — a full data
+  // migration is out of scope here, so this is a small local id-bridge used
+  // only to pre-select the right chip when jumping from a TEAM_ROSTER context
+  // (Dokumente-Tab) into that legacy-id-based upload form.
+  const ROSTER_TO_LEGACY_TEAM_ID = {
+    leitung: "projektleitung", food: "fnb", hospitality: "guest", club: "sunrise",
+    operations: "ops", marketing: "marketing", sustainability: "sustainability", finance: "finance"
+  };
 
   const rosterNameIndex = buildRosterNameIndex();
   let doubleRoleHintShown = false;
@@ -1414,15 +1463,420 @@
     el.teamMainTitle.textContent = team.name;
     el.teamMainLead.textContent = "Lead: " + [...team.lead, ...team.stv].join(", ");
     el.teamMainEmpty.classList.add("hidden");
-    el.teamTaskArea.classList.remove("hidden");
-    if (!boardTasks.length) fetchTasksFresh().then(renderTaskArea);
-    else renderTaskArea();
+
+    if (team.isLeitung) {
+      el.teamTabsWrap.classList.add("hidden");
+      el.leitungHub.classList.remove("hidden");
+      loadLeitungData();
+      return;
+    }
+
+    el.leitungHub.classList.add("hidden");
+    el.teamTabsWrap.classList.remove("hidden");
+    switchTeamTab("tasks");
+    ensureTasksAndPhasesLoaded().then(() => {
+      renderTaskArea();
+      renderRoadmap();
+      renderTeamDocs();
+    });
   }
 
   async function fetchTasksFresh() {
     const { data } = await postBoard({ resource: "tasks", op: "list" });
     if (data && data.ok) boardTasks = data.items || [];
     return boardTasks;
+  }
+
+  async function fetchPhasesFresh() {
+    const { data } = await postBoard({ resource: "phases", op: "list" });
+    if (data && data.ok) boardPhases = data.items || [];
+    return boardPhases;
+  }
+
+  async function fetchDecisionsFresh() {
+    const { data } = await postBoard({ resource: "decisions", op: "list" });
+    if (data && data.ok) boardDecisions = data.items || [];
+    return boardDecisions;
+  }
+
+  let tasksAndPhasesLoaded = false;
+  async function ensureTasksAndPhasesLoaded() {
+    if (tasksAndPhasesLoaded) return;
+    tasksAndPhasesLoaded = true;
+    await Promise.all([fetchTasksFresh(), fetchPhasesFresh()]);
+  }
+
+  async function loadLeitungData() {
+    await ensureTasksAndPhasesLoaded();
+    if (!boardDecisions.length) await fetchDecisionsFresh();
+    renderLeitungOverview();
+    renderMasterRoadmap();
+    renderDecisionJournal();
+    renderOrgChart();
+  }
+
+  /* ---------------------------------------------------------
+     TEAM TABS (Nächste Schritte / Roadmap / Dokumente)
+     --------------------------------------------------------- */
+
+  function switchTeamTab(tabName) {
+    currentTeamTab = tabName;
+    document.querySelectorAll(".team-tabs [data-team-tab]").forEach(btn => {
+      btn.classList.toggle("is-active", btn.dataset.teamTab === tabName);
+    });
+    el.teamTaskArea.classList.toggle("hidden", tabName !== "tasks");
+    el.teamRoadmapArea.classList.toggle("hidden", tabName !== "roadmap");
+    el.teamDocsArea.classList.toggle("hidden", tabName !== "docs");
+    if (tabName === "roadmap") {
+      if (!roadmapHintShown) { roadmapHintShown = true; el.roadmapFirstHint.classList.remove("hidden"); }
+      renderRoadmap();
+    }
+    if (tabName === "docs") renderTeamDocs();
+  }
+
+  /* ---------------------------------------------------------
+     ROADMAP (team-eigene Phasen)
+     --------------------------------------------------------- */
+
+  function renderRoadmap() {
+    if (!selectedSidebarTeamId) return;
+    const team = getRosterTeamById(selectedSidebarTeamId);
+    if (!team || team.isLeitung) return;
+    const phases = boardPhases.filter(p => p.teamId === selectedSidebarTeamId).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const canEdit = !!currentIdentity && (currentIdentity.isLeitung || currentIdentity.teamId === selectedSidebarTeamId);
+
+    populateTaskPhaseSelect(phases);
+
+    if (!phases.length) {
+      el.roadmapEmptyHint.classList.remove("hidden");
+      el.seedPhasesBtn.classList.remove("hidden");
+      el.seedPhasesBtn.disabled = !canEdit;
+      el.seedPhasesBtn.title = canEdit ? "" : "Nur das zuständige Team kann Phasen anlegen";
+      el.roadmapTimeline.innerHTML = "";
+      el.roadmapPhaseTasks.innerHTML = "";
+      return;
+    }
+    el.roadmapEmptyHint.classList.add("hidden");
+    el.seedPhasesBtn.classList.add("hidden");
+
+    el.roadmapTimeline.innerHTML = "";
+    phases.forEach(p => {
+      const teamTasks = boardTasks.filter(t => t.teamId === selectedSidebarTeamId && t.phaseId === p.id);
+      const doneCount = teamTasks.filter(t => t.status === "done").length;
+      const pct = teamTasks.length ? Math.round((doneCount / teamTasks.length) * 100) : 0;
+
+      const node = document.createElement("button");
+      node.type = "button";
+      node.className = "roadmap-phase" +
+        (p.status === "done" ? " is-done" : p.status === "active" ? " is-active" : "") +
+        (selectedRoadmapPhaseId === p.id ? " is-selected" : "");
+      node.style.setProperty("--tb-team-color", team.color);
+      node.innerHTML = `
+        <span class="roadmap-phase-dot"></span>
+        <span class="roadmap-phase-name">${escapeHtml(p.name)}</span>
+        <span class="roadmap-phase-progress">${teamTasks.length ? pct + "%" : "–"}</span>
+      `;
+      node.addEventListener("click", () => {
+        selectedRoadmapPhaseId = selectedRoadmapPhaseId === p.id ? null : p.id;
+        renderRoadmap();
+      });
+      el.roadmapTimeline.appendChild(node);
+    });
+
+    el.roadmapPhaseTasks.innerHTML = "";
+    if (selectedRoadmapPhaseId) {
+      const phase = phases.find(p => p.id === selectedRoadmapPhaseId);
+      const tasksInPhase = boardTasks.filter(t => t.teamId === selectedSidebarTeamId && t.phaseId === selectedRoadmapPhaseId);
+      const heading = document.createElement("h5");
+      heading.className = "task-column-title";
+      heading.textContent = phase ? `Aufgaben in „${phase.name}“` : "Aufgaben";
+      el.roadmapPhaseTasks.appendChild(heading);
+      if (tasksInPhase.length) {
+        const list = document.createElement("div");
+        list.className = "task-card-list";
+        tasksInPhase.forEach(t => list.appendChild(buildTaskCard(t, { showTeamBadge: false })));
+        el.roadmapPhaseTasks.appendChild(list);
+      } else {
+        const hint = document.createElement("p");
+        hint.className = "hint";
+        hint.textContent = "Noch keine Aufgaben dieser Phase zugeordnet.";
+        el.roadmapPhaseTasks.appendChild(hint);
+      }
+    }
+  }
+
+  async function seedDefaultPhases() {
+    if (!selectedSidebarTeamId || !currentIdentity) return;
+    const { data } = await postBoard({ resource: "phases", op: "seedDefaults", actor: currentIdentity, teamId: selectedSidebarTeamId });
+    if (data && data.ok) {
+      boardPhases = boardPhases.filter(p => p.teamId !== selectedSidebarTeamId).concat(data.items || []);
+      renderRoadmap();
+      showToast("Standard-Phasen angelegt.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  function populateTaskPhaseSelect(phasesForTeam) {
+    const phases = phasesForTeam || boardPhases.filter(p => p.teamId === selectedSidebarTeamId);
+    const current = el.taskPhaseSelect.value;
+    el.taskPhaseSelect.innerHTML = '<option value="">Keine Phase</option>';
+    phases.sort((a, b) => (a.order || 0) - (b.order || 0)).forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      el.taskPhaseSelect.appendChild(opt);
+    });
+    el.taskPhaseSelect.value = current || "";
+  }
+
+  /* ---------------------------------------------------------
+     DOKUMENTE (gefilterte Sicht auf boardFiles)
+     --------------------------------------------------------- */
+
+  function renderTeamDocs() {
+    if (!selectedSidebarTeamId) return;
+    const team = getRosterTeamById(selectedSidebarTeamId);
+    if (!team || team.isLeitung) return;
+
+    const phases = boardPhases.filter(p => p.teamId === selectedSidebarTeamId).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const currentPhaseFilter = el.teamDocsPhaseFilter.value;
+    el.teamDocsPhaseFilter.innerHTML = '<option value="">Alle Phasen</option>';
+    phases.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      el.teamDocsPhaseFilter.appendChild(opt);
+    });
+    el.teamDocsPhaseFilter.value = currentPhaseFilter || "";
+
+    const legacyTeamId = ROSTER_TO_LEGACY_TEAM_ID[selectedSidebarTeamId];
+    let docs = boardFiles.filter(f => (f.teamIds || []).includes(legacyTeamId) || (f.teamIds || []).includes(selectedSidebarTeamId));
+    const phaseFilter = el.teamDocsPhaseFilter.value;
+    if (phaseFilter) docs = docs.filter(f => f.phaseId === phaseFilter);
+    const query = (el.teamDocsSearch.value || "").trim().toLowerCase();
+    if (query) {
+      docs = docs.filter(f => f.name.toLowerCase().includes(query) || (f.description || "").toLowerCase().includes(query));
+    }
+
+    el.teamDocsList.innerHTML = "";
+    docs.forEach(f => el.teamDocsList.appendChild(buildSharedFileCard(f)));
+    el.teamDocsEmptyHint.classList.toggle("hidden", docs.length > 0);
+  }
+
+  /* ---------------------------------------------------------
+     PROJEKTLEITUNG-HUB: Tabs
+     --------------------------------------------------------- */
+
+  function switchLeitungTab(tabName) {
+    currentLeitungTab = tabName;
+    document.querySelectorAll(".team-tabs [data-leitung-tab]").forEach(btn => {
+      btn.classList.toggle("is-active", btn.dataset.leitungTab === tabName);
+    });
+    el.leitungOverview.classList.toggle("hidden", tabName !== "overview");
+    el.leitungRoadmap.classList.toggle("hidden", tabName !== "roadmap");
+    el.leitungDecisions.classList.toggle("hidden", tabName !== "decisions");
+    el.leitungOrg.classList.toggle("hidden", tabName !== "org");
+  }
+
+  /* ---------------------------------------------------------
+     ÜBERSICHT: Fortschritt pro Team
+     --------------------------------------------------------- */
+
+  function renderLeitungOverview() {
+    el.teamOverviewCards.innerHTML = "";
+    TEAM_ROSTER.filter(t => !t.isLeitung).forEach(team => {
+      const teamTasks = boardTasks.filter(t => t.teamId === team.id);
+      const doneCount = teamTasks.filter(t => t.status === "done").length;
+      const pct = teamTasks.length ? Math.round((doneCount / teamTasks.length) * 100) : null;
+      const openWithDeadline = teamTasks.filter(t => t.status !== "done" && t.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline));
+      const nextDeadline = openWithDeadline.length ? openWithDeadline[0].deadline : null;
+      const criticalCount = teamTasks.filter(t => t.status === "blocked" || taskDeadlineUrgency(t.deadline, t.status) === "is-overdue").length;
+
+      const card = document.createElement("div");
+      card.className = "team-overview-card";
+      card.style.setProperty("--tb-team-color", team.color);
+      card.innerHTML = `
+        <div class="toc-header">
+          <span class="toc-avatar" style="background:${team.color}">${escapeHtml((team.name || "?").charAt(0))}</span>
+          <div>
+            <div class="toc-name">${escapeHtml(team.name)}</div>
+            <div class="toc-lead">Lead: ${escapeHtml([...team.lead, ...team.stv].join(", "))}</div>
+          </div>
+        </div>
+        <div class="toc-progress-bar"><div class="toc-progress-fill" style="width:${pct === null ? 0 : pct}%; background:${team.color}"></div></div>
+        <div class="toc-meta">
+          <span>${pct === null ? "Keine Aufgaben" : pct + "% erledigt"}</span>
+          <span>${nextDeadline ? "Nächste Deadline: " + relativeDeadlineLabel(nextDeadline) : "Keine offene Deadline"}</span>
+        </div>
+        ${criticalCount > 0 ? `<div class="toc-critical">⚠ ${criticalCount} kritisch (blockiert/überfällig)</div>` : ""}
+      `;
+      card.addEventListener("click", () => selectSidebarTeam(team.id));
+      el.teamOverviewCards.appendChild(card);
+    });
+  }
+
+  /* ---------------------------------------------------------
+     MASTER-ROADMAP: globale Projektphasen + aktuelle Team-Phasen
+     --------------------------------------------------------- */
+
+  function renderMasterRoadmap() {
+    el.masterRoadmapTimeline.innerHTML = "";
+
+    const globalWrap = document.createElement("div");
+    globalWrap.className = "master-roadmap-global";
+    [...PROJECT_PHASES].sort((a, b) => a.order - b.order).forEach(p => {
+      const node = document.createElement("div");
+      node.className = "master-roadmap-phase";
+      node.textContent = p.name;
+      globalWrap.appendChild(node);
+    });
+    el.masterRoadmapTimeline.appendChild(globalWrap);
+
+    const teamsWithActivePhase = TEAM_ROSTER.filter(t => !t.isLeitung).map(team => {
+      const phases = boardPhases.filter(p => p.teamId === team.id);
+      const active = phases.find(p => p.status === "active") || phases.sort((a, b) => (a.order || 0) - (b.order || 0)).find(p => p.status !== "done");
+      return { team, active, hasPhases: phases.length > 0 };
+    });
+
+    const milestonesWrap = document.createElement("div");
+    milestonesWrap.className = "master-roadmap-milestones";
+    milestonesWrap.innerHTML = '<h5 class="task-column-title">Wo steht jedes Team gerade?</h5>';
+    teamsWithActivePhase.forEach(({ team, active, hasPhases }) => {
+      const row = document.createElement("div");
+      row.className = "master-roadmap-team-row";
+      row.innerHTML = `
+        <span class="team-sidebar-dot" style="background:${team.color}"></span>
+        <span class="mrt-team-name">${escapeHtml(team.name)}</span>
+        <span class="mrt-phase">${!hasPhases ? "Noch keine Phasen angelegt" : (active ? escapeHtml(active.name) : "Alle Phasen abgeschlossen")}</span>
+      `;
+      milestonesWrap.appendChild(row);
+    });
+    el.masterRoadmapTimeline.appendChild(milestonesWrap);
+  }
+
+  /* ---------------------------------------------------------
+     ENTSCHEIDUNGS-JOURNAL
+     --------------------------------------------------------- */
+
+  const DECISION_TYPE_LABELS = { FAKT: "Fakt", ANNAHME: "Annahme", EMPFEHLUNG: "Empfehlung", OFFENE_FRAGE: "Offene Frage" };
+
+  function populateDecisionTeamSelects() {
+    const fillSelect = (selectEl, includeAllOption) => {
+      const current = selectEl.value;
+      selectEl.innerHTML = includeAllOption ? '<option value="">Alle Teams</option>' : "";
+      TEAM_ROSTER.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.name;
+        selectEl.appendChild(opt);
+      });
+      selectEl.value = current || "";
+    };
+    fillSelect(el.decisionTeamFilter, true);
+    fillSelect(el.decisionTeamSelect, false);
+  }
+
+  function renderDecisionJournal() {
+    let items = [...boardDecisions];
+    if (decisionTypeFilterValue) items = items.filter(d => d.type === decisionTypeFilterValue);
+    if (decisionTeamFilterValue) items = items.filter(d => d.teamId === decisionTeamFilterValue);
+
+    el.decisionList.innerHTML = "";
+    el.decisionEmptyHint.classList.toggle("hidden", items.length > 0);
+
+    items.forEach(d => {
+      const team = getRosterTeamById(d.teamId);
+      const canEdit = !!currentIdentity && (currentIdentity.isLeitung || currentIdentity.teamId === d.teamId);
+      const card = document.createElement("div");
+      card.className = `decision-card type-${d.type}`;
+      const date = d.createdAt ? new Date(d.createdAt).toLocaleDateString("de-DE") : "";
+      card.innerHTML = `
+        <div class="decision-card-top">
+          <span class="decision-type-badge type-${d.type}">${DECISION_TYPE_LABELS[d.type] || d.type}</span>
+          <span class="decision-team-name">${team ? escapeHtml(team.name) : ""}</span>
+        </div>
+        <div class="decision-text">${escapeHtml(d.text)}</div>
+        <div class="decision-meta">${escapeHtml(d.createdBy || "")}${date ? " · " + date : ""}</div>
+      `;
+      if (canEdit) {
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "decision-delete-btn";
+        delBtn.textContent = "✕ Löschen";
+        delBtn.addEventListener("click", () => deleteDecision(d.id));
+        card.appendChild(delBtn);
+      }
+      el.decisionList.appendChild(card);
+    });
+
+    el.addDecisionBtn.disabled = !currentIdentity;
+    el.addDecisionBtn.title = currentIdentity ? "" : "Zuerst anmelden";
+  }
+
+  function resetDecisionForm() {
+    el.decisionTextInput.value = "";
+    el.decisionTypeSelect.value = "FAKT";
+    if (currentIdentity && !currentIdentity.isLeitung) el.decisionTeamSelect.value = currentIdentity.teamId;
+  }
+
+  async function saveDecision() {
+    const text = el.decisionTextInput.value.trim();
+    if (!text) { showToast("Bitte einen Text eingeben."); return; }
+    const payload = {
+      teamId: el.decisionTeamSelect.value,
+      type: el.decisionTypeSelect.value,
+      text
+    };
+    const { data } = await postBoard({ resource: "decisions", op: "create", actor: currentIdentity, data: payload });
+    if (data && data.ok) {
+      boardDecisions.unshift(data.item);
+      renderDecisionJournal();
+      el.decisionForm.classList.add("hidden");
+      resetDecisionForm();
+      showToast("Eintrag gespeichert.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  async function deleteDecision(id) {
+    if (!confirm("Diesen Eintrag wirklich löschen?")) return;
+    const { data } = await postBoard({ resource: "decisions", op: "delete", actor: currentIdentity, id });
+    if (data && data.ok) {
+      boardDecisions = boardDecisions.filter(d => d.id !== id);
+      renderDecisionJournal();
+      showToast("Eintrag gelöscht.");
+    } else {
+      handleBoardWriteError(data);
+    }
+  }
+
+  /* ---------------------------------------------------------
+     ORGANIGRAMM
+     --------------------------------------------------------- */
+
+  function renderOrgChart() {
+    el.orgChartCards.innerHTML = "";
+    TEAM_ROSTER.forEach(team => {
+      const card = document.createElement("div");
+      card.className = "org-card";
+      card.style.setProperty("--tb-team-color", team.color);
+      const memberBadges = team.members.map(name => {
+        const isDual = (rosterNameIndex[name] || []).length > 1;
+        return `<span class="org-member-chip${isDual ? " org-dual-role-badge" : ""}" title="${isDual ? "Doppelrolle: " + rosterNameIndex[name].map(id => { const t = getRosterTeamById(id); return t ? t.name : id; }).join(" + ") : ""}">${escapeHtml(name)}</span>`;
+      }).join("");
+      card.innerHTML = `
+        <div class="org-card-header" style="border-color:${team.color}">
+          <span class="team-sidebar-dot" style="background:${team.color}"></span>
+          <span class="org-card-name">${escapeHtml(team.name)}</span>
+        </div>
+        <div class="org-card-role"><strong>Lead:</strong> ${escapeHtml(team.lead.join(", "))}</div>
+        ${team.stv.length ? `<div class="org-card-role"><strong>Stv.:</strong> ${escapeHtml(team.stv.join(", "))}</div>` : ""}
+        <div class="org-card-members">${memberBadges}</div>
+      `;
+      el.orgChartCards.appendChild(card);
+    });
   }
 
   function canEditTask(task) {
@@ -1543,6 +1997,7 @@
     if (data && data.ok) {
       task.status = data.item.status;
       renderTaskArea();
+      renderRoadmap();
     } else {
       handleBoardWriteError(data);
     }
@@ -1554,6 +2009,7 @@
     if (data && data.ok) {
       boardTasks = boardTasks.filter(t => t.id !== id);
       renderTaskArea();
+      renderRoadmap();
       showToast("Aufgabe gelöscht.");
     } else {
       handleBoardWriteError(data);
@@ -1614,6 +2070,8 @@
     el.taskDescInput.value = "";
     el.taskDeadlineInput.value = "";
     el.taskPriorityInput.value = "medium";
+    populateTaskPhaseSelect();
+    el.taskPhaseSelect.value = "";
     pendingTaskAffectedTeams = [];
     renderRosterTeamChipPicker(el.taskAffectedTeamChips, pendingTaskAffectedTeams, selectedSidebarTeamId);
   }
@@ -1628,12 +2086,14 @@
       description: el.taskDescInput.value.trim(),
       deadline: el.taskDeadlineInput.value || "",
       priority: el.taskPriorityInput.value,
+      phaseId: el.taskPhaseSelect.value || "",
       affectedTeams: [...pendingTaskAffectedTeams]
     };
     const { data } = await postBoard({ resource: "tasks", op: "create", actor: currentIdentity, data: payload });
     if (data && data.ok) {
       boardTasks.push(data.item);
       renderTaskArea();
+      renderRoadmap();
       el.taskForm.classList.add("hidden");
       resetTaskForm();
       showToast("Aufgabe gespeichert.");
@@ -1749,6 +2209,7 @@
       if (data && data.ok) {
         boardFiles.unshift(data.item);
         renderSharedFiles();
+        if (el.teamDocsArea && !el.teamDocsArea.classList.contains("hidden")) renderTeamDocs();
         el.sharedFileUploadForm.classList.add("hidden");
         resetSharedFileForm();
         showToast("Datei hochgeladen.");
@@ -2067,6 +2528,52 @@
       el.taskForm.classList.add("hidden");
       resetTaskForm();
     });
+
+    // --- Team-Board: team tabs (Nächste Schritte / Roadmap / Dokumente) ---
+    document.querySelectorAll(".team-tabs [data-team-tab]").forEach(btn => {
+      btn.addEventListener("click", () => switchTeamTab(btn.dataset.teamTab));
+    });
+
+    // --- Team-Board: Roadmap ---
+    el.seedPhasesBtn.addEventListener("click", seedDefaultPhases);
+
+    // --- Team-Board: Dokumente-Tab ---
+    el.teamDocsSearch.addEventListener("input", renderTeamDocs);
+    el.teamDocsPhaseFilter.addEventListener("change", renderTeamDocs);
+    el.goToUploadFromDocsBtn.addEventListener("click", () => {
+      const legacyTeamId = selectedSidebarTeamId ? ROSTER_TO_LEGACY_TEAM_ID[selectedSidebarTeamId] : null;
+      if (legacyTeamId && !pendingSharedFileTeamIds.includes(legacyTeamId)) {
+        pendingSharedFileTeamIds.push(legacyTeamId);
+      }
+      renderTeamChipPicker(el.sharedFileTeamChips, pendingSharedFileTeamIds);
+      expandCollapsible(el.filesToggle, el.filesBody);
+      el.sharedFileUploadForm.classList.remove("hidden");
+      el.filesCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    // --- Projektleitung-Hub: Tabs ---
+    document.querySelectorAll(".team-tabs [data-leitung-tab]").forEach(btn => {
+      btn.addEventListener("click", () => switchLeitungTab(btn.dataset.leitungTab));
+    });
+
+    // --- Projektleitung-Hub: Entscheidungs-Journal ---
+    el.decisionTypeFilter.addEventListener("change", () => {
+      decisionTypeFilterValue = el.decisionTypeFilter.value;
+      renderDecisionJournal();
+    });
+    el.decisionTeamFilter.addEventListener("change", () => {
+      decisionTeamFilterValue = el.decisionTeamFilter.value;
+      renderDecisionJournal();
+    });
+    el.addDecisionBtn.addEventListener("click", () => {
+      resetDecisionForm();
+      el.decisionForm.classList.remove("hidden");
+    });
+    el.decisionSaveBtn.addEventListener("click", saveDecision);
+    el.decisionCancelBtn.addEventListener("click", () => {
+      el.decisionForm.classList.add("hidden");
+      resetDecisionForm();
+    });
   }
 
   /* ---------------------------------------------------------
@@ -2095,6 +2602,7 @@
     renderTeamChipPicker(el.sharedFileTeamChips, pendingSharedFileTeamIds);
     renderIdentityNameOptions();
     renderTeamSidebar();
+    populateDecisionTeamSelects();
     try {
       const saved = sessionStorage.getItem(IDENTITY_SESSION_KEY);
       if (saved) {

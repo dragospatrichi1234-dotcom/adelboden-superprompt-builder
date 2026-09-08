@@ -87,6 +87,16 @@ function isRosterLeadOrStv(team, name) {
   return team.lead.includes(name) || team.stv.includes(name);
 }
 
+// Global project milestones (Master-Roadmap in der Projektleitung-Ansicht),
+// nicht zu verwechseln mit den Team-eigenen Phasen (die live im Team-Board
+// als "phases"-Ressource verwaltet werden).
+const PROJECT_PHASES = [
+  { id: "pitch", name: "Pitch", order: 0 },
+  { id: "vorbereitung", name: "Vorbereitung", order: 1 },
+  { id: "live_event", name: "Live Event", order: 2 },
+  { id: "debriefing", name: "Debriefing / Abschluss", order: 3 }
+];
+
 const PROJECT_META = {
   eventDates: "7.–10. Januar 2027 (Mittwoch bis Sonntag)",
   location: "Sunrise VIP Cube, FIS Ski World Cup Adelboden 2027",

@@ -1739,3 +1739,270 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   padding: 12px 22px;
 }
 
+/* ============================================================
+   TEAM-BOARD DESIGN TOKENS (UX-Design-Daten doc)
+   Scoped to .board-layout on purpose — the Superprompt Builder side
+   keeps its existing Navy/Ice/Red look untouched.
+   ============================================================ */
+
+.board-layout {
+  --tb-amber: #E8871E;
+  --tb-ink: #1A1A1A;
+  --tb-muted: #5B6577;
+  --tb-line: #E4E8F0;
+  --tb-status-ok: #2C6E49;
+  --tb-status-risk: #C98A1E;
+  --tb-status-overdue: #B23A3A;
+  --tb-serif: "Fraunces", Georgia, serif;
+  --tb-sans: "IBM Plex Sans", var(--font);
+  font-family: var(--tb-sans);
+  color: var(--tb-ink);
+}
+
+.board-layout h2, .board-layout h3, .board-layout .board-title, .board-layout .team-main-header h3 {
+  font-family: var(--tb-serif);
+}
+
+.board-layout .card,
+.team-main,
+.task-card,
+.team-overview-card,
+.decision-card {
+  box-shadow: none;
+  border: 1px solid var(--tb-line);
+}
+
+.board-layout .hint { color: var(--tb-muted); }
+
+/* No ALL-CAPS labels per design doc — smaller/muted instead of uppercase */
+.board-layout .task-column-title {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.board-layout :focus-visible {
+  outline: 2px solid var(--tb-amber);
+  outline-offset: 2px;
+}
+
+.board-layout .btn-primary {
+  background: var(--tb-amber);
+  border-color: var(--tb-amber);
+  color: var(--navy);
+  font-weight: 700;
+}
+.board-layout .btn-primary:hover { background: #d17a15; }
+
+/* Sidebar keeps full-height square edges (no radius) — contrast against
+   the rounded "SaaS card kit" look, per design doc section 3. */
+.team-sidebar { border-radius: 0; }
+
+/* ============================================================
+   TEAM TABS (Nächste Schritte / Roadmap / Dokumente)
+   ============================================================ */
+
+.team-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--tb-line);
+  margin-bottom: 16px;
+}
+
+.team-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 4px;
+  margin-right: 18px;
+  font-family: var(--tb-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tb-muted);
+  cursor: pointer;
+}
+.team-tab:hover { color: var(--tb-ink); }
+.team-tab.is-active { color: var(--navy); border-bottom-color: var(--tb-amber); }
+
+.team-tab-panel { animation: fadeIn 0.15s ease; }
+
+/* ============================================================
+   ROADMAP TIMELINE
+   ============================================================ */
+
+.roadmap-first-hint {
+  background: #fdf1e0;
+  border: 1px solid #f0d9ae;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.roadmap-timeline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 20px 0 24px;
+}
+
+.roadmap-phase {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 4px;
+  font-family: var(--tb-sans);
+}
+
+.roadmap-phase-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--tb-line);
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.roadmap-phase-line {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  background: var(--tb-line);
+}
+.roadmap-phase-row { display: flex; align-items: center; width: 100%; }
+.roadmap-phase-row .roadmap-phase-line:first-child { border-radius: 3px 0 0 3px; }
+
+.roadmap-phase.is-done .roadmap-phase-dot { background: var(--tb-team-color, var(--navy)); border-color: var(--tb-team-color, var(--navy)); }
+.roadmap-phase.is-active .roadmap-phase-dot { border-color: var(--tb-team-color, var(--navy)); border-width: 3px; }
+.roadmap-phase.is-selected .roadmap-phase-name { text-decoration: underline; }
+
+.roadmap-phase-name { font-size: 12px; font-weight: 700; color: var(--tb-ink); text-align: center; }
+.roadmap-phase-progress { font-size: 10.5px; color: var(--tb-muted); }
+
+.roadmap-phase-tasks { margin-top: 8px; }
+.roadmap-phase-tasks-title { font-size: 12.5px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+
+/* ============================================================
+   DOKUMENTE TAB
+   ============================================================ */
+
+.docs-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.docs-toolbar .file-search-input { flex: 1; margin-bottom: 0; }
+.docs-toolbar select { width: auto; min-width: 150px; }
+
+/* ============================================================
+   PROJEKTLEITUNG HUB
+   ============================================================ */
+
+.leitung-panel { animation: fadeIn 0.15s ease; }
+
+.team-overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.team-overview-card {
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--white);
+  cursor: pointer;
+  text-align: left;
+}
+
+.toc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.toc-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--white); font-weight: 700; font-size: 13px; flex: none;
+}
+.toc-name { font-family: var(--tb-serif); font-weight: 700; font-size: 14.5px; color: var(--tb-ink); }
+.toc-lead { font-size: 11.5px; color: var(--tb-muted); }
+
+.toc-progress-bar { height: 6px; background: var(--tb-line); border-radius: 999px; overflow: hidden; margin: 10px 0 8px; }
+.toc-progress-fill { height: 100%; border-radius: 999px; }
+
+.toc-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11.5px; color: var(--tb-muted); }
+.toc-critical { margin-top: 8px; color: var(--tb-status-overdue); font-weight: 700; font-size: 11.5px; }
+
+.master-roadmap { display: flex; flex-direction: column; gap: 20px; }
+.master-roadmap-global { display: flex; flex-wrap: wrap; gap: 8px; }
+.master-roadmap-phase {
+  font-family: var(--tb-serif); font-weight: 700; color: var(--navy); font-size: 13.5px;
+  background: var(--tb-line); border-radius: 999px; padding: 6px 14px;
+}
+.master-roadmap-milestones { display: flex; flex-direction: column; gap: 8px; }
+.master-roadmap-team-row {
+  display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--tb-ink);
+  padding: 8px 10px; background: var(--white); border-radius: 8px;
+}
+.master-roadmap-team-row .mrt-team-name { font-weight: 700; min-width: 170px; }
+.master-roadmap-team-row .mrt-phase { color: var(--tb-muted); }
+
+.decision-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.decision-toolbar select { width: auto; min-width: 140px; }
+
+.decision-list { display: flex; flex-direction: column; gap: 10px; }
+.decision-card { border-radius: 10px; padding: 12px 14px; background: var(--white); }
+.decision-card.type-FAKT { border-left: 3px solid var(--navy); }
+.decision-card.type-ANNAHME { border-left: 3px solid var(--tb-amber); }
+.decision-card.type-EMPFEHLUNG { border-left: 3px solid var(--tb-status-ok); }
+.decision-card.type-OFFENE_FRAGE { border-left: 3px solid var(--tb-status-overdue); background: #fdf0f0; }
+.decision-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.decision-type-badge { font-size: 10.5px; font-weight: 700; text-transform: none; color: var(--tb-muted); }
+.decision-type-badge.type-FAKT { color: var(--navy); }
+.decision-type-badge.type-ANNAHME { color: #a8681a; }
+.decision-type-badge.type-EMPFEHLUNG { color: var(--tb-status-ok); }
+.decision-type-badge.type-OFFENE_FRAGE { color: var(--tb-status-overdue); }
+.decision-team-name { font-size: 11.5px; color: var(--tb-muted); }
+.decision-text { font-size: 13px; color: var(--tb-ink); margin: 4px 0; }
+.decision-meta { font-size: 11px; color: var(--tb-muted); }
+.decision-delete-btn {
+  margin-top: 8px; border: none; background: none; color: var(--tb-status-overdue);
+  font-size: 11.5px; cursor: pointer; padding: 0;
+}
+
+.org-chart-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.org-card { border-radius: 12px; padding: 16px; background: var(--white); }
+.org-card-header {
+  display: flex; align-items: center; gap: 8px;
+  border-left: 3px solid var(--tb-line); padding-left: 10px; margin-bottom: 10px;
+}
+.org-card-name { font-family: var(--tb-serif); font-weight: 700; font-size: 14.5px; color: var(--tb-ink); }
+.org-card-role { font-size: 12px; color: var(--tb-ink); margin-bottom: 4px; }
+.org-card-role strong { color: var(--tb-muted); font-weight: 600; }
+.org-card-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.org-member-chip {
+  font-size: 11px; color: var(--tb-ink); background: var(--tb-line);
+  border-radius: 999px; padding: 3px 10px;
+}
+.org-dual-role-badge {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  background: var(--tb-amber);
+  color: var(--navy);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+
+@media (max-width: 700px) {
+  .team-overview-cards, .org-chart-cards { grid-template-columns: 1fr; }
+  .decision-toolbar { flex-direction: column; align-items: stretch; }
+}
+

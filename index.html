@@ -14,7 +14,10 @@
 <title>Adelboden 2027 – Superprompt Builder</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230b1f3a%22/><text x=%2250%22 y=%2266%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23e6f1fb%22 font-family=%22sans-serif%22>A</text></svg>">
-<link rel="stylesheet" href="./style.css?v=9">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css?v=11">
 </head>
 <body>
 
@@ -378,59 +381,144 @@
 
         <div id="teamMainEmpty" class="hint task-main-empty">Wähle links ein Team, um dessen Aufgaben zu sehen.</div>
 
-        <div id="teamTaskArea" class="hidden">
-          <div class="task-section-header">
-            <h4 class="card-title">Nächste Schritte</h4>
-            <button type="button" id="addTaskBtn" class="btn btn-secondary btn-small" disabled title="Zuerst anmelden">+ Aufgabe</button>
+        <!-- Operative Teams: 3 Tabs -->
+        <div id="teamTabsWrap" class="hidden">
+          <div class="team-tabs" role="tablist">
+            <button type="button" class="team-tab is-active" data-team-tab="tasks">Nächste Schritte</button>
+            <button type="button" class="team-tab" data-team-tab="roadmap">Roadmap</button>
+            <button type="button" class="team-tab" data-team-tab="docs">Dokumente</button>
           </div>
 
-          <div class="task-columns">
-            <div class="task-column">
-              <h5 class="task-column-title">Diese Woche</h5>
-              <div id="taskListWeek" class="task-card-list"></div>
-              <p class="hint task-column-empty" data-empty-for="taskListWeek">Keine Aufgaben diese Woche.</p>
+          <div id="teamTaskArea" class="team-tab-panel">
+            <div class="task-section-header">
+              <h4 class="card-title">Nächste Schritte</h4>
+              <button type="button" id="addTaskBtn" class="btn btn-secondary btn-small" disabled title="Zuerst anmelden">+ Aufgabe</button>
             </div>
-            <div class="task-column">
-              <h5 class="task-column-title">Später</h5>
-              <div id="taskListLater" class="task-card-list"></div>
-              <p class="hint task-column-empty" data-empty-for="taskListLater">Keine weiteren Aufgaben.</p>
+
+            <div class="task-columns">
+              <div class="task-column">
+                <h5 class="task-column-title">Diese Woche</h5>
+                <div id="taskListWeek" class="task-card-list"></div>
+                <p class="hint task-column-empty" data-empty-for="taskListWeek">Keine Aufgaben diese Woche.</p>
+              </div>
+              <div class="task-column">
+                <h5 class="task-column-title">Später</h5>
+                <div id="taskListLater" class="task-card-list"></div>
+                <p class="hint task-column-empty" data-empty-for="taskListLater">Keine weiteren Aufgaben.</p>
+              </div>
+              <div class="task-column">
+                <h5 class="task-column-title">Blockiert</h5>
+                <div id="taskListBlocked" class="task-card-list"></div>
+                <p class="hint task-column-empty" data-empty-for="taskListBlocked">Nichts blockiert. 🎉</p>
+              </div>
             </div>
-            <div class="task-column">
-              <h5 class="task-column-title">Blockiert</h5>
-              <div id="taskListBlocked" class="task-card-list"></div>
-              <p class="hint task-column-empty" data-empty-for="taskListBlocked">Nichts blockiert. 🎉</p>
+
+            <div id="taskForm" class="inline-form hidden">
+              <div class="field">
+                <label for="taskTitleInput">Titel</label>
+                <input id="taskTitleInput" type="text" placeholder="z.B. Getränkeliste finalisieren">
+              </div>
+              <div class="field">
+                <label for="taskDescInput">Beschreibung</label>
+                <textarea id="taskDescInput" rows="2" placeholder="Optional…"></textarea>
+              </div>
+              <div class="field">
+                <label for="taskDeadlineInput">Deadline</label>
+                <input id="taskDeadlineInput" type="date">
+              </div>
+              <div class="field">
+                <label for="taskPriorityInput">Priorität</label>
+                <select id="taskPriorityInput">
+                  <option value="low">Niedrig</option>
+                  <option value="medium" selected>Mittel</option>
+                  <option value="high">Hoch</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="taskPhaseSelect">Phase</label>
+                <select id="taskPhaseSelect"><option value="">Keine Phase</option></select>
+              </div>
+              <div class="field">
+                <label>Betroffene Teams (Schnittstellen)</label>
+                <div id="taskAffectedTeamChips" class="chip-group multi"></div>
+              </div>
+              <div class="inline-form-actions">
+                <button type="button" id="taskSaveBtn" class="btn btn-primary">Speichern</button>
+                <button type="button" id="taskCancelBtn" class="btn btn-ghost">Abbrechen</button>
+              </div>
             </div>
           </div>
 
-          <div id="taskForm" class="inline-form hidden">
-            <div class="field">
-              <label for="taskTitleInput">Titel</label>
-              <input id="taskTitleInput" type="text" placeholder="z.B. Getränkeliste finalisieren">
+          <div id="teamRoadmapArea" class="team-tab-panel hidden">
+            <p id="roadmapFirstHint" class="hint roadmap-first-hint hidden">Jede Phase zeigt euren Fortschritt — Klick auf eine Phase filtert die Aufgaben.</p>
+            <div id="roadmapEmptyHint" class="hint hidden">Für dieses Team sind noch keine Phasen angelegt.</div>
+            <button type="button" id="seedPhasesBtn" class="btn btn-secondary btn-small hidden" disabled>Standard-Phasen anlegen</button>
+            <div id="roadmapTimeline" class="roadmap-timeline"></div>
+            <div id="roadmapPhaseTasks" class="roadmap-phase-tasks"></div>
+          </div>
+
+          <div id="teamDocsArea" class="team-tab-panel hidden">
+            <div class="docs-toolbar">
+              <input id="teamDocsSearch" type="text" placeholder="🔎 Dokumente durchsuchen…" class="file-search-input">
+              <select id="teamDocsPhaseFilter"><option value="">Alle Phasen</option></select>
             </div>
-            <div class="field">
-              <label for="taskDescInput">Beschreibung</label>
-              <textarea id="taskDescInput" rows="2" placeholder="Optional…"></textarea>
-            </div>
-            <div class="field">
-              <label for="taskDeadlineInput">Deadline</label>
-              <input id="taskDeadlineInput" type="date">
-            </div>
-            <div class="field">
-              <label for="taskPriorityInput">Priorität</label>
-              <select id="taskPriorityInput">
-                <option value="low">Niedrig</option>
-                <option value="medium" selected>Mittel</option>
-                <option value="high">Hoch</option>
+            <div id="teamDocsList" class="file-list"></div>
+            <p id="teamDocsEmptyHint" class="hint hidden">Noch keine Dokumente für dieses Team. <button type="button" id="goToUploadFromDocsBtn" class="link-btn">Jetzt hochladen ↓</button></p>
+          </div>
+        </div>
+
+        <!-- Projektleitung: Admin-/Übersichts-Hub -->
+        <div id="leitungHub" class="hidden">
+          <div class="team-tabs" role="tablist">
+            <button type="button" class="team-tab is-active" data-leitung-tab="overview">Übersicht</button>
+            <button type="button" class="team-tab" data-leitung-tab="roadmap">Master-Roadmap</button>
+            <button type="button" class="team-tab" data-leitung-tab="decisions">Entscheidungs-Journal</button>
+            <button type="button" class="team-tab" data-leitung-tab="org">Organigramm</button>
+          </div>
+
+          <div id="leitungOverview" class="leitung-panel">
+            <div id="teamOverviewCards" class="team-overview-cards"></div>
+          </div>
+
+          <div id="leitungRoadmap" class="leitung-panel hidden">
+            <div id="masterRoadmapTimeline" class="master-roadmap"></div>
+          </div>
+
+          <div id="leitungDecisions" class="leitung-panel hidden">
+            <div class="decision-toolbar">
+              <select id="decisionTypeFilter">
+                <option value="">Alle Typen</option>
+                <option value="FAKT">Fakt</option>
+                <option value="ANNAHME">Annahme</option>
+                <option value="EMPFEHLUNG">Empfehlung</option>
+                <option value="OFFENE_FRAGE">Offene Frage</option>
               </select>
+              <select id="decisionTeamFilter"><option value="">Alle Teams</option></select>
+              <button type="button" id="addDecisionBtn" class="btn btn-secondary btn-small" disabled title="Zuerst anmelden">+ Eintrag</button>
             </div>
-            <div class="field">
-              <label>Betroffene Teams (Schnittstellen)</label>
-              <div id="taskAffectedTeamChips" class="chip-group multi"></div>
+            <div id="decisionForm" class="inline-form hidden">
+              <div class="field"><label for="decisionTeamSelect">Team</label><select id="decisionTeamSelect"></select></div>
+              <div class="field">
+                <label for="decisionTypeSelect">Typ</label>
+                <select id="decisionTypeSelect">
+                  <option value="FAKT">Fakt</option>
+                  <option value="ANNAHME">Annahme</option>
+                  <option value="EMPFEHLUNG">Empfehlung</option>
+                  <option value="OFFENE_FRAGE">Offene Frage</option>
+                </select>
+              </div>
+              <div class="field"><label for="decisionTextInput">Text</label><textarea id="decisionTextInput" rows="2"></textarea></div>
+              <div class="inline-form-actions">
+                <button type="button" id="decisionSaveBtn" class="btn btn-primary">Speichern</button>
+                <button type="button" id="decisionCancelBtn" class="btn btn-ghost">Abbrechen</button>
+              </div>
             </div>
-            <div class="inline-form-actions">
-              <button type="button" id="taskSaveBtn" class="btn btn-primary">Speichern</button>
-              <button type="button" id="taskCancelBtn" class="btn btn-ghost">Abbrechen</button>
-            </div>
+            <div id="decisionList" class="decision-list"></div>
+            <p id="decisionEmptyHint" class="hint hidden">Noch keine Einträge im Entscheidungs-Journal.</p>
+          </div>
+
+          <div id="leitungOrg" class="leitung-panel hidden">
+            <div id="orgChartCards" class="org-chart-cards"></div>
           </div>
         </div>
       </div>
@@ -532,10 +620,10 @@
 <footer class="app-footer">
   <span>Hotelfachschule Thun · Transfermodul Hospitality Live Experience · FIS Ski World Cup Adelboden 2027</span>
   <span class="footer-sep">·</span>
-  <span>Alle Eingaben werden ausschliesslich lokal in diesem Browser gespeichert.</span>
+  <span id="footerStorageNote">Superprompt-Builder-Eingaben werden lokal in diesem Browser gespeichert. Team-Board-Daten (Deadlines, Aufgaben, Dateien) sind zentral gespeichert und für alle Teams sichtbar.</span>
 </footer>
 
-<script src="./data.js?v=7"></script>
-<script src="./app.js?v=10"></script>
+<script src="./data.js?v=8"></script>
+<script src="./app.js?v=12"></script>
 </body>
 </html>
