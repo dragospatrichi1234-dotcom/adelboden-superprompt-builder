@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=14">
+<link rel="stylesheet" href="./style.css?v=15">
 </head>
 <body>
 
@@ -499,6 +499,7 @@
             <button type="button" class="team-tab" data-leitung-tab="roadmap">Master-Roadmap</button>
             <button type="button" class="team-tab" data-leitung-tab="decisions">Entscheidungs-Journal</button>
             <button type="button" class="team-tab" data-leitung-tab="org">Organigramm</button>
+            <button type="button" class="team-tab" data-leitung-tab="import">Bulk-Import</button>
           </div>
 
           <div id="leitungOverview" class="leitung-panel">
@@ -544,6 +545,53 @@
 
           <div id="leitungOrg" class="leitung-panel hidden">
             <div id="orgChartCards" class="org-chart-cards"></div>
+          </div>
+
+          <div id="leitungImport" class="leitung-panel hidden">
+            <p class="hint">Nur für Projektleitung: Aufgaben für mehrere Teams auf einmal anlegen.</p>
+
+            <h4 class="card-title">Gleiche Aufgabe für mehrere Teams</h4>
+            <div class="field">
+              <label for="bulkTaskTitleInput">Titel</label>
+              <input id="bulkTaskTitleInput" type="text" placeholder="z.B. Schnittstellen-Briefing lesen">
+            </div>
+            <div class="field">
+              <label for="bulkTaskDescInput">Beschreibung</label>
+              <textarea id="bulkTaskDescInput" rows="2" placeholder="Optional…"></textarea>
+            </div>
+            <div class="field">
+              <label for="bulkTaskDeadlineInput">Deadline</label>
+              <input id="bulkTaskDeadlineInput" type="date">
+            </div>
+            <div class="field">
+              <label for="bulkTaskPriorityInput">Priorität</label>
+              <select id="bulkTaskPriorityInput">
+                <option value="low">Niedrig</option>
+                <option value="medium" selected>Mittel</option>
+                <option value="high">Hoch</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Für welche Teams?</label>
+              <div id="bulkTaskTeamChips" class="chip-group multi"></div>
+            </div>
+            <button type="button" id="bulkTaskCreateBtn" class="btn btn-primary" disabled title="Zuerst anmelden">Für ausgewählte Teams anlegen</button>
+            <p id="bulkTaskResultHint" class="hint hidden"></p>
+
+            <hr class="import-divider">
+
+            <h4 class="card-title">Tabellen-Import (aus Excel/Sheets einfügen)</h4>
+            <p class="hint">Spalten in dieser Reihenfolge kopieren: Team, Titel, Beschreibung, Deadline (JJJJ-MM-TT), Priorität (low/medium/high). Direkt aus Excel/Google Sheets kopieren und unten einfügen.</p>
+            <textarea id="bulkImportTextarea" rows="6" placeholder="food&#9;Getränkeliste finalisieren&#9;Für Opening Night&#9;2026-11-01&#9;high"></textarea>
+            <button type="button" id="bulkImportPreviewBtn" class="btn btn-secondary btn-small">Vorschau erstellen</button>
+
+            <div id="bulkImportPreviewWrap" class="hidden">
+              <div class="table-scroll-wrap">
+                <table id="bulkImportTable" class="bulk-import-table"></table>
+              </div>
+              <button type="button" id="bulkImportStartBtn" class="btn btn-primary">Import starten</button>
+              <p id="bulkImportResultHint" class="hint hidden"></p>
+            </div>
           </div>
         </div>
       </div>
@@ -667,6 +715,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=8"></script>
-<script src="./app.js?v=16"></script>
+<script src="./app.js?v=17"></script>
 </body>
 </html>
