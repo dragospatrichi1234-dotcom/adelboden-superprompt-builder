@@ -1346,9 +1346,22 @@
     return row;
   }
 
+  // Scopes the shared-files card to whichever team is currently selected in
+  // the sidebar — otherwise every team's page showed every other team's
+  // files mixed together, which read as clutter. Leitung (or no team picked
+  // yet) still sees everything, since that's the cross-team overview role.
+  function filesScopedToCurrentTeam() {
+    if (!selectedSidebarTeamId) return boardFiles;
+    const team = getRosterTeamById(selectedSidebarTeamId);
+    if (!team || team.isLeitung) return boardFiles;
+    const legacyTeamId = ROSTER_TO_LEGACY_TEAM_ID[selectedSidebarTeamId];
+    return boardFiles.filter(f => (f.teamIds || []).includes(legacyTeamId) || (f.teamIds || []).includes(selectedSidebarTeamId));
+  }
+
   function renderSharedFiles() {
-    const important = boardFiles.filter(f => f.important);
-    let others = boardFiles.filter(f => !f.important);
+    const scoped = filesScopedToCurrentTeam();
+    const important = scoped.filter(f => f.important);
+    let others = scoped.filter(f => !f.important);
 
     const categoryFilter = el.sharedFileCategoryFilter.value;
     if (categoryFilter) others = others.filter(f => f.category === categoryFilter);
@@ -1369,10 +1382,7 @@
     others.forEach(f => el.sharedFileList.appendChild(buildSharedFileCard(f)));
     el.sharedFileEmptyHint.classList.toggle("hidden", others.length > 0);
 
-    const otherCount = boardFiles.filter(f => !f.important).length;
-    el.otherFilesToggleLabel.textContent = otherCount > 0
-      ? `Weitere Dateien anzeigen (${otherCount})`
-      : "Weitere Dateien anzeigen";
+    el.otherFilesToggleLabel.textContent = "Weitere Dateien anzeigen";
   }
 
   async function toggleFileImportant(f) {
@@ -1569,6 +1579,8 @@
     el.teamMainTitle.textContent = team.name;
     el.teamMainLead.textContent = "Lead: " + [...team.lead, ...team.stv].join(", ");
     el.teamMainEmpty.classList.add("hidden");
+
+    renderSharedFiles();
 
     if (team.isLeitung) {
       el.teamTabsWrap.classList.add("hidden");
