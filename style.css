@@ -1296,6 +1296,17 @@ select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appea
   border-radius: 999px;
 }
 
+.file-category-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tb-muted, var(--navy-2));
+  background: var(--tb-line, var(--ice));
+  padding: 1px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+}
+
 .deadline-actions { flex: none; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
 .deadline-status-toggle {
   font-size: 11px;
