@@ -1729,6 +1729,7 @@
   async function loadLeitungData() {
     await ensureTasksAndPhasesLoaded();
     if (!boardDecisions.length) await fetchDecisionsFresh();
+    if (!miroLinksLoaded) await fetchMiroLinksFresh();
     renderLeitungOverview();
     renderMasterRoadmap();
     renderDecisionJournal();
@@ -1977,7 +1978,7 @@
     const existing = boardMiroLinks[selectedSidebarTeamId];
 
     el.miroSetupBtn.disabled = !canEdit;
-    el.miroSetupBtn.title = canEdit ? "" : "Nur das zuständige Team kann den Miro-Link setzen";
+    el.miroSetupBtn.title = canEdit ? "" : (currentIdentity ? "Nur das zuständige Team kann den Miro-Link setzen" : "Zuerst anmelden");
     el.miroSetupWrap.classList.add("hidden");
 
     if (existing && existing.url) {
@@ -1990,7 +1991,7 @@
       el.miroFrameWrap.classList.add("hidden");
       el.miroFrame.src = "";
       el.miroEmptyState.classList.remove("hidden");
-      el.miroSetupBtn.classList.toggle("hidden", !canEdit);
+      el.miroSetupBtn.classList.remove("hidden");
     }
   }
 
@@ -2034,6 +2035,12 @@
     el.teamOverviewCards.innerHTML = "";
     TEAM_ROSTER.filter(t => !t.isLeitung).forEach(team => {
       const teamTasks = boardTasks.filter(t => t.teamId === team.id);
+      const teamPhases = boardPhases.filter(p => p.teamId === team.id);
+      const legacyTeamId = ROSTER_TO_LEGACY_TEAM_ID[team.id];
+      const teamDocs = boardFiles.filter(f => (f.teamIds || []).includes(legacyTeamId) || (f.teamIds || []).includes(team.id));
+      const hasMiro = !!(boardMiroLinks[team.id] && boardMiroLinks[team.id].url);
+      const notStarted = teamTasks.length === 0 && teamPhases.length === 0 && teamDocs.length === 0 && !hasMiro;
+
       const doneCount = teamTasks.filter(t => t.status === "done").length;
       const pct = teamTasks.length ? Math.round((doneCount / teamTasks.length) * 100) : null;
       const openWithDeadline = teamTasks.filter(t => t.status !== "done" && t.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline));
@@ -2041,7 +2048,7 @@
       const criticalCount = teamTasks.filter(t => t.status === "blocked" || taskDeadlineUrgency(t.deadline, t.status) === "is-overdue").length;
 
       const card = document.createElement("div");
-      card.className = "team-overview-card";
+      card.className = "team-overview-card" + (notStarted ? " is-not-started" : "");
       card.style.setProperty("--tb-team-color", team.color);
       card.innerHTML = `
         <div class="toc-header">
@@ -2051,6 +2058,7 @@
             <div class="toc-lead">Lead: ${escapeHtml([...team.lead, ...team.stv].join(", "))}</div>
           </div>
         </div>
+        ${notStarted ? `<div class="toc-not-started">⚠ Noch nicht gestartet — keine Aufgaben, Phasen, Dokumente oder Miro-Board</div>` : ""}
         <div class="toc-progress-bar"><div class="toc-progress-fill" style="width:${pct === null ? 0 : pct}%; background:${team.color}"></div></div>
         <div class="toc-meta">
           <span>${pct === null ? "Keine Aufgaben" : pct + "% erledigt"}</span>
