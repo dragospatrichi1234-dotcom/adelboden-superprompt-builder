@@ -389,7 +389,8 @@ export default async (request) => {
         name: d.name !== undefined ? String(d.name).trim().slice(0, MAX_TITLE_LEN) : existing.name,
         period: d.period !== undefined ? String(d.period).trim().slice(0, 100) : (existing.period || ""),
         summary: d.summary !== undefined ? String(d.summary).trim().slice(0, MAX_DESC_LEN) : (existing.summary || ""),
-        status: ["open", "active", "done"].includes(d.status) ? d.status : existing.status
+        status: ["open", "active", "done"].includes(d.status) ? d.status : existing.status,
+        order: typeof d.order === "number" ? d.order : existing.order
       };
       await store.setJSON(id, updated);
       return jsonResponse(200, { ok: true, item: updated });
