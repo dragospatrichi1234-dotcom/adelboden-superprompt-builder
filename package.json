@@ -1,0 +1,8 @@
+{
+  "name": "adelboden-2027-superprompt-builder",
+  "private": true,
+  "description": "Adelboden 2027 – Superprompt Builder (statische App + Netlify Functions).",
+  "dependencies": {
+    "@netlify/blobs": "^11.0.0"
+  }
+}
