@@ -212,6 +212,7 @@
       "navBuilderBtn", "navBoardBtn", "builderPage", "boardPage", "goToBoardFilesBtn",
       "supabaseStatusBadge",
       "identityPicker", "identityStatus", "identityNameSelect", "identityTeamDisambigSelect",
+      "identityPinRow", "identityPinInput", "identityPinConfirmBtn",
       "teamSidebar", "teamMainTitle", "teamMainLead", "teamMainEmpty", "teamTaskArea",
       "addTaskBtn", "taskListWeek", "taskListLater", "taskListBlocked",
       "taskForm", "taskTitleInput", "taskDescInput", "taskDeadlineInput", "taskPriorityInput",
@@ -1415,6 +1416,7 @@
     currentIdentity = null;
     boardUnlocked = false;
     try { sessionStorage.removeItem(IDENTITY_SESSION_KEY); } catch (e) { /* ignore */ }
+    hidePinRow();
     renderIdentityUi();
     el.addDeadlineBtn.disabled = true;
     el.showSharedFileFormBtn.disabled = true;
@@ -1451,12 +1453,42 @@
     }
   }
 
-  async function finalizeIdentity(name, teamId, { silent } = {}) {
-    const { data } = await postBoard({ resource: "identity", op: "check", actor: { name, teamId } });
+  let pendingLeitungLogin = null;
+
+  function hidePinRow() {
+    pendingLeitungLogin = null;
+    el.identityPinRow.classList.add("hidden");
+    el.identityPinInput.value = "";
+  }
+
+  // Leitung needs a PIN (see LEITUNG_PINS server-side) — everyone else logs
+  // in straight away, unchanged.
+  function attemptLogin(name, teamId) {
+    if (teamId === "leitung") {
+      pendingLeitungLogin = { name, teamId };
+      el.identityPinRow.classList.remove("hidden");
+      el.identityPinInput.focus();
+      return;
+    }
+    finalizeIdentity(name, teamId);
+  }
+
+  async function confirmPinLogin() {
+    if (!pendingLeitungLogin) return;
+    const { name, teamId } = pendingLeitungLogin;
+    const pin = el.identityPinInput.value.trim();
+    if (!pin) { showToast("Bitte den PIN eingeben."); return; }
+    const ok = await finalizeIdentity(name, teamId, { pin });
+    if (ok) hidePinRow();
+  }
+
+  async function finalizeIdentity(name, teamId, { silent, pin } = {}) {
+    const { data } = await postBoard({ resource: "identity", op: "check", actor: { name, teamId, pin } });
     if (data && data.ok) {
       currentIdentity = data.actor;
       boardUnlocked = true;
-      try { sessionStorage.setItem(IDENTITY_SESSION_KEY, JSON.stringify(currentIdentity)); } catch (e) { /* ignore */ }
+      const stored = pin ? { ...currentIdentity, pin } : currentIdentity;
+      try { sessionStorage.setItem(IDENTITY_SESSION_KEY, JSON.stringify(stored)); } catch (e) { /* ignore */ }
       renderIdentityUi();
       el.addDeadlineBtn.disabled = false;
       el.showSharedFileFormBtn.disabled = false;
@@ -2793,10 +2825,11 @@
       const name = el.identityNameSelect.value;
       el.identityTeamDisambigSelect.classList.add("hidden");
       el.identityTeamDisambigSelect.innerHTML = "";
+      hidePinRow();
       if (!name) return;
       const teamIds = rosterNameIndex[name] || [];
       if (teamIds.length === 1) {
-        finalizeIdentity(name, teamIds[0]);
+        attemptLogin(name, teamIds[0]);
       } else if (teamIds.length > 1) {
         const hint = document.createElement("option");
         hint.value = "";
@@ -2820,7 +2853,11 @@
     el.identityTeamDisambigSelect.addEventListener("change", () => {
       const teamId = el.identityTeamDisambigSelect.value;
       const name = el.identityNameSelect.value;
-      if (teamId && name) finalizeIdentity(name, teamId);
+      if (teamId && name) attemptLogin(name, teamId);
+    });
+    el.identityPinConfirmBtn.addEventListener("click", confirmPinLogin);
+    el.identityPinInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") confirmPinLogin();
     });
 
     // --- Team-Board: deadlines ---
@@ -2970,7 +3007,7 @@
       const saved = sessionStorage.getItem(IDENTITY_SESSION_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.name && parsed.teamId) finalizeIdentity(parsed.name, parsed.teamId, { silent: true });
+        if (parsed && parsed.name && parsed.teamId) finalizeIdentity(parsed.name, parsed.teamId, { silent: true, pin: parsed.pin });
       }
     } catch (e) { /* sessionStorage unavailable — stay unidentified */ }
   }
