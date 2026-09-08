@@ -21,9 +21,16 @@
 [[headers]]
   for = "/*.css"
   [headers.values]
-    Cache-Control = "public, max-age=3600"
+    # Deliberately NOT a long max-age: we already cache-bust via ?v=N query
+    # strings on every deploy. A long max-age here meant that if any Netlify
+    # edge node fetched a stale copy during a deploy's brief propagation
+    # window, that stale response stayed cached on that node for the full
+    # max-age instead of self-correcting on the next request (root cause of
+    # the recurring "stale JS after confirmed-correct deploy" issue).
+    # must-revalidate lets Netlify's own per-deploy cache invalidation do its job.
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/*.js"
   [headers.values]
-    Cache-Control = "public, max-age=3600"
+    Cache-Control = "public, max-age=0, must-revalidate"
