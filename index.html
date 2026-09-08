@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=18">
+<link rel="stylesheet" href="./style.css?v=19">
 </head>
 <body>
 
@@ -392,6 +392,7 @@
             <button type="button" class="team-tab is-active" data-team-tab="tasks">Nächste Schritte</button>
             <button type="button" class="team-tab" data-team-tab="roadmap">Roadmap</button>
             <button type="button" class="team-tab" data-team-tab="docs">Dokumente</button>
+            <button type="button" class="team-tab" data-team-tab="miro">🧠 Miro</button>
           </div>
 
           <div id="teamTaskArea" class="team-tab-panel">
@@ -493,6 +494,27 @@
             </div>
             <div id="teamDocsList" class="file-list"></div>
             <p id="teamDocsEmptyHint" class="hint hidden">Noch keine Dokumente für dieses Team. <button type="button" id="goToUploadFromDocsBtn" class="link-btn">Jetzt hochladen ↓</button></p>
+          </div>
+
+          <div id="teamMiroArea" class="team-tab-panel hidden">
+            <div id="miroEmptyState" class="hint hidden">
+              Noch kein Miro-Board für dieses Team hinterlegt.
+            </div>
+            <div id="miroSetupWrap" class="inline-form hidden">
+              <div class="field">
+                <label for="miroUrlInput">Miro-Embed-Link</label>
+                <input id="miroUrlInput" type="url" placeholder="https://miro.com/app/live-embed/…">
+                <p class="hint">In Miro: „…" → „Einbetten" → Link hier einfügen.</p>
+              </div>
+              <div class="inline-form-actions">
+                <button type="button" id="miroSaveBtn" class="btn btn-primary">Speichern</button>
+              </div>
+            </div>
+            <button type="button" id="miroSetupBtn" class="btn btn-secondary btn-small hidden" disabled title="Zuerst anmelden">+ Miro-Board hinterlegen</button>
+            <div id="miroFrameWrap" class="miro-frame-wrap hidden">
+              <iframe id="miroFrame" class="miro-frame" allowfullscreen></iframe>
+              <button type="button" id="miroEditBtn" class="btn btn-small btn-ghost miro-edit-btn hidden">✎ Link ändern</button>
+            </div>
           </div>
         </div>
 
@@ -735,6 +757,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=9"></script>
-<script src="./app.js?v=23"></script>
+<script src="./app.js?v=24"></script>
 </body>
 </html>
