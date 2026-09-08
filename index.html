@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=21">
+<link rel="stylesheet" href="./style.css?v=22">
 </head>
 <body>
 
@@ -513,7 +513,10 @@
             <button type="button" id="miroSetupBtn" class="btn btn-secondary btn-small hidden" disabled title="Zuerst anmelden">+ Miro-Board hinterlegen</button>
             <div id="miroFrameWrap" class="miro-frame-wrap hidden">
               <iframe id="miroFrame" class="miro-frame" allowfullscreen></iframe>
-              <button type="button" id="miroEditBtn" class="btn btn-small btn-ghost miro-edit-btn hidden">✎ Link ändern</button>
+              <div class="miro-frame-actions">
+                <a id="miroOpenFullBtn" href="#" target="_blank" rel="noopener" class="btn btn-small">⤢ Vollbild öffnen</a>
+                <button type="button" id="miroEditBtn" class="btn btn-small btn-ghost hidden">✎ Link ändern</button>
+              </div>
             </div>
           </div>
         </div>
@@ -757,6 +760,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=9"></script>
-<script src="./app.js?v=25"></script>
+<script src="./app.js?v=26"></script>
 </body>
 </html>
