@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=23">
+<link rel="stylesheet" href="./style.css?v=24">
 </head>
 <body>
 
@@ -380,11 +380,30 @@
       <nav class="team-sidebar" id="teamSidebar" aria-label="Team wählen"></nav>
       <div class="team-main">
         <div class="team-main-header">
-          <h3 id="teamMainTitle">Wähle links ein Team</h3>
-          <p class="hint" id="teamMainLead"></p>
+          <h3 id="teamMainTitle">📊 Projekt-Übersicht</h3>
+          <p class="hint" id="teamMainLead">Wähle links ein Team für Details, oder sieh hier den Gesamtstand.</p>
         </div>
 
-        <div id="teamMainEmpty" class="hint task-main-empty">Wähle links ein Team, um dessen Aufgaben zu sehen.</div>
+        <div id="teamMainEmpty" class="project-dashboard">
+          <div id="dashboardStats" class="dashboard-stats"></div>
+
+          <div class="dashboard-columns">
+            <div class="dashboard-col">
+              <h4 class="card-title">🗓️ Deadlines diese Woche</h4>
+              <div id="dashboardDeadlines" class="deadline-list"></div>
+              <p id="dashboardDeadlinesEmpty" class="hint hidden">Keine Deadlines in den nächsten 7 Tagen.</p>
+            </div>
+            <div class="dashboard-col">
+              <h4 class="card-title">🕘 Letzte Aktivität</h4>
+              <div id="dashboardActivity" class="dashboard-activity-list"></div>
+              <p id="dashboardActivityEmpty" class="hint hidden">Noch keine Aktivität erfasst.</p>
+            </div>
+          </div>
+
+          <h4 class="card-title">⭐ Wichtige Dokumente</h4>
+          <div id="dashboardDocs" class="file-list"></div>
+          <p id="dashboardDocsEmpty" class="hint hidden">Noch keine wichtigen Dokumente markiert.</p>
+        </div>
 
         <!-- Operative Teams: 3 Tabs -->
         <div id="teamTabsWrap" class="hidden">
@@ -760,6 +779,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="./supabase-client.js?v=1"></script>
 <script src="./data.js?v=9"></script>
-<script src="./app.js?v=27"></script>
+<script src="./app.js?v=28"></script>
 </body>
 </html>
